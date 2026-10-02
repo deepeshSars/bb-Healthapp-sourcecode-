@@ -3,6 +3,7 @@ package org.binarybrains.bbhealthapp.auth.register;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.ActiveProfiles;
 import org.binarybrains.bbhealthapp.users.User;
 import org.binarybrains.bbhealthapp.users.models.AccountStatus;
 
@@ -11,6 +12,7 @@ import static org.hamcrest.Matchers.equalTo;
 import static org.binarybrains.bbhealthapp.config.loaddata.DataGenerator.createRegisterRequestWithRandomPinCode;
 
 @SpringBootTest
+@ActiveProfiles("integration")
 class RegisterControllerIntegrationTest {
 
 

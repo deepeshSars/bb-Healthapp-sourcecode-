@@ -165,6 +165,20 @@
 				<profileActive>cloud</profileActive>
 			</properties>
 		</profile>
+		<profile>
+			<id>test</id>
+			<properties>
+				<build.profile.id>test</build.profile.id>
+				<profileActive>test</profileActive>
+			</properties>
+		</profile>
+		<profile>
+			<id>integration</id>
+			<properties>
+				<build.profile.id>integration</build.profile.id>
+				<profileActive>integration</profileActive>
+			</properties>
+		</profile>
 	</profiles>
 
 </project>

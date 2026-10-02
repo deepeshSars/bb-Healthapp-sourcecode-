@@ -17,6 +17,8 @@
 
 	<properties>
 		<java.version>8</java.version>
+		<maven.compiler.source>8</maven.compiler.source>
+		<maven.compiler.target>8</maven.compiler.target>
 	</properties>
 
 	<dependencies>
@@ -57,7 +59,7 @@
 		<dependency>
 			<groupId>org.projectlombok</groupId>
 			<artifactId>lombok</artifactId>
-			<version>1.18.12</version>
+			<version>1.18.30</version>
 			<scope>provided</scope>
 		</dependency>
 
@@ -163,6 +165,20 @@
 			<properties>
 				<build.profile.id>cloud</build.profile.id>
 				<profileActive>cloud</profileActive>
+			</properties>
+		</profile>
+		<profile>
+			<id>test</id>
+			<properties>
+				<build.profile.id>test</build.profile.id>
+				<profileActive>test</profileActive>
+			</properties>
+		</profile>
+		<profile>
+			<id>integration</id>
+			<properties>
+				<build.profile.id>integration</build.profile.id>
+				<profileActive>integration</profileActive>
 			</properties>
 		</profile>
 	</profiles>

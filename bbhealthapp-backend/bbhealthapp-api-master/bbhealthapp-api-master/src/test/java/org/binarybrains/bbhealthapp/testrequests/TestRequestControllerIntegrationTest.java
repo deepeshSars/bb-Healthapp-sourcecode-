@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.security.test.context.support.WithUserDetails;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.web.server.ResponseStatusException;
 import org.binarybrains.bbhealthapp.testrequests.flow.TestRequestFlow;
 
@@ -17,6 +18,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.binarybrains.bbhealthapp.testutils.TestData.*;
 
 @SpringBootTest
+@ActiveProfiles("integration")
 @Slf4j
 class TestRequestControllerIntegrationTest {
 

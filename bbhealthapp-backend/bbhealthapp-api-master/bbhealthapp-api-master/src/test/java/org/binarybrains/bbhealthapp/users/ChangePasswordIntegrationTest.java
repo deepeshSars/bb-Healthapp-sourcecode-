@@ -7,9 +7,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
 import org.springframework.security.test.context.support.WithUserDetails;
+import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.context.junit4.SpringRunner;
 import org.binarybrains.bbhealthapp.exception.BinaryBrainsResponseStatusException;
 import org.binarybrains.bbhealthapp.users.credentials.ChangePasswordRequest;
@@ -21,6 +20,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 
 @SpringBootTest
+@ActiveProfiles("integration")
 class ChangePasswordIntegrationTest {
 
 

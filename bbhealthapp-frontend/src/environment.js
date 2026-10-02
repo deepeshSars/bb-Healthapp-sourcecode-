@@ -9,11 +9,11 @@ const masterSvc = process.env.REACT_APP_MASTERSVC_HOST;
 
 export const environment = {
   // MASTER SERVICE
-  MASTER_HOST_URL: `http://${masterSvc}:8081`,
+  MASTER_HOST_URL: `http://${masterSvc}:8080`,
 
   // AUTH / REGISTER SERVICE
   REGISTER_BASE_URL: `http://${regSvc}:8082`,
-  LOGIN_URL: `http://${masterSvc}:8081/auth/login`,
+  LOGIN_URL: `http://${masterSvc}:8080/auth/login`,
   REGISTER_URL: `http://${regSvc}:8082/auth/register`,
   DOCTOR_REGISTER_URL: `http://${regSvc}:8082/auth/doctor/register`,
   TESTER_REGISTER_URL: `http://${regSvc}:8082/auth/tester/register`,
