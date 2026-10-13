@@ -1,5 +1,10 @@
 pipeline {
-    agent any
+    agent {
+        docker {
+            image 'maven:3.9-eclipse-temurin-21'
+            args '-v /var/run/docker.sock:/var/run/docker.sock'
+        }
+    }
 
     environment {
         // AWS Region
@@ -38,13 +43,18 @@ pipeline {
             steps {
                 script {
                     echo '=== Build Frontend Stage ==='
+                    // Install Node.js and npm
+                    sh '''
+                        curl -fsSL https://deb.nodesource.com/setup_18.x | sh -
+                        apt-get install -y nodejs
+                    '''
                     dir('bbhealthapp-frontend') {
                         echo 'Installing frontend dependencies...'
                         sh 'npm install'
-                        
+
                         echo 'Building frontend application...'
                         sh 'npm run build'
-                        
+
                         echo 'Frontend build completed successfully'
                     }
                 }
@@ -96,6 +106,16 @@ pipeline {
             steps {
                 script {
                     echo '=== Configure AWS Credentials ==='
+                    // Install AWS CLI and kubectl
+                    sh '''
+                        apt-get update && apt-get install -y unzip curl
+                        curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+                        unzip awscliv2.zip
+                        ./aws/install
+                        curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+                        chmod +x kubectl
+                        mv kubectl /usr/local/bin/
+                    '''
                     withCredentials([[
                         $class: 'AmazonWebServicesCredentialsBinding',
                         credentialsId: 'aws-credentials',

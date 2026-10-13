@@ -94,7 +94,7 @@ public class SwaggerConfig {
     private ApiInfo apiInfo() {
         return new ApiInfoBuilder().title("Bbhealthapp Apis")
                 .description("BBHEALTHAPP APIs for Authorities,Doctors,testers and patients")
-                .contact("BinaryBrains")
+                .contact(new Contact("BinaryBrains", "https://binarybrains.com", "contact@binarybrains.com"))
                 .license("Apache 2.0")
                 .licenseUrl("http://www.apache.org/licenses/LICENSE-2.0.html")
                 .version("1.0.0")
