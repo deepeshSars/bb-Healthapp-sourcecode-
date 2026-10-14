@@ -13,6 +13,10 @@ pipeline {
         ECR_DOCUMENT = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/bbhealthapp-document-service"
 
         IMAGE_TAG = "${BUILD_NUMBER}"
+
+        // AWS credentials - set these in Jenkins job configuration or as environment variables
+        AWS_ACCESS_KEY_ID = credentials('aws-access-key-id')
+        AWS_SECRET_ACCESS_KEY = credentials('aws-secret-access-key')
     }
 
     stages {
@@ -82,17 +86,11 @@ pipeline {
 
         stage('Login to AWS ECR') {
             steps {
-
-                withCredentials([[
-                    $class: 'AmazonWebServicesCredentialsBinding',
-                    credentialsId: 'aws-creds'
-                ]]) {
-
-                    sh """
-                    aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com
-                    """
-                }
-
+                sh """
+                export AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+                export AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+                aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com
+                """
             }
         }
 
@@ -184,46 +182,32 @@ pipeline {
         stage('Update Kubeconfig') {
 
             steps {
-
-                withCredentials([[
-                    $class: 'AmazonWebServicesCredentialsBinding',
-                    credentialsId: 'aws-creds'
-                ]]) {
-
-                    sh """
-                    aws eks update-kubeconfig \\
-                    --region ${AWS_REGION} \\
-                    --name bbhealthapp-dev
-                    """
-
-                }
-
+                sh """
+                export AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+                export AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+                aws eks update-kubeconfig \\
+                --region ${AWS_REGION} \\
+                --name bbhealthapp-dev
+                """
             }
 
         }
         stage('Deploy to Kubernetes') {
 
             steps {
+                sh """
+                export AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+                export AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+                kubectl apply -f k8s/namespace.yaml
+                kubectl apply -f k8s/configmap.yaml
+                kubectl apply -f k8s/secret.yaml
 
-                withCredentials([[
-                    $class: 'AmazonWebServicesCredentialsBinding',
-                    credentialsId: 'aws-creds'
-                ]]) {
-
-                    sh """
-                        kubectl apply -f k8s/namespace.yaml
-                        kubectl apply -f k8s/configmap.yaml
-                        kubectl apply -f k8s/secret.yaml
-
-                        kubectl apply -f k8s/master-service-deployment.yaml
-                        kubectl apply -f k8s/register-service-deployment.yaml
-                        kubectl apply -f k8s/document-service-deployment.yaml
-                        kubectl apply -f k8s/frontend-deployment.yaml
-                        kubectl apply -f k8s/ingress.yaml
-                    """
-
-                }
-
+                kubectl apply -f k8s/master-service-deployment.yaml
+                kubectl apply -f k8s/register-service-deployment.yaml
+                kubectl apply -f k8s/document-service-deployment.yaml
+                kubectl apply -f k8s/frontend-deployment.yaml
+                kubectl apply -f k8s/ingress.yaml
+                """
             }
 
         }
@@ -231,21 +215,14 @@ pipeline {
         stage('Verify Deployment') {
 
             steps {
-
-                withCredentials([[
-                    $class: 'AmazonWebServicesCredentialsBinding',
-                    credentialsId: 'aws-creds'
-                ]]) {
-
-                    sh """
-                        kubectl get nodes
-                        kubectl get pods -n bbhealthapp
-                        kubectl get svc -n bbhealthapp
-                        kubectl get ingress -n bbhealthapp
-                    """
-
-                }
-
+                sh """
+                export AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+                export AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+                kubectl get nodes
+                kubectl get pods -n bbhealthapp
+                kubectl get svc -n bbhealthapp
+                kubectl get ingress -n bbhealthapp
+                """
             }
 
         }
