@@ -23,53 +23,48 @@ pipeline {
             }
         }
 
-        stage('Install Tools') {
+        stage('Check Required Tools') {
             steps {
                 sh '''
-                    # Install Maven
+                    echo "Checking for required tools..."
+                    
+                    # Check Maven
                     if ! command -v mvn &> /dev/null; then
-                        echo "Installing Maven..."
-                        sudo apt-get update
-                        sudo apt-get install -y maven
+                        echo "WARNING: Maven not found. Please install Maven on the Jenkins agent."
+                        echo "Installation: sudo apt-get install -y maven"
+                    else
+                        echo "Maven: $(mvn -version | head -n 1)"
                     fi
 
-                    # Install Docker
+                    # Check Docker
                     if ! command -v docker &> /dev/null; then
-                        echo "Installing Docker..."
-                        sudo apt-get update
-                        sudo apt-get install -y ca-certificates curl gnupg
-                        sudo install -m 0755 -d /etc/apt/keyrings
-                        curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
-                        sudo chmod a+r /etc/apt/keyrings/docker.gpg
-                        echo \
-                          "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
-                          $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
-                          sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
-                        sudo apt-get update
-                        sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
-                        sudo usermod -aG docker jenkins || true
-                        sudo systemctl start docker || true
+                        echo "WARNING: Docker not found. Please install Docker on the Jenkins agent."
+                        echo "Follow instructions at: https://docs.docker.com/engine/install/"
+                    else
+                        echo "Docker: $(docker --version)"
                     fi
 
-                    # Install AWS CLI
+                    # Check AWS CLI
                     if ! command -v aws &> /dev/null; then
-                        echo "Installing AWS CLI..."
-                        sudo apt-get update
-                        sudo apt-get install -y unzip
-                        curl "https://awscli.amazonaws.com/awscli-exe-linux-$(uname -m).zip" -o "awscliv2.zip"
-                        sudo unzip awscliv2.zip -d /tmp
-                        sudo /tmp/aws/install
-                        rm awscliv2.zip
+                        echo "WARNING: AWS CLI not found. Please install AWS CLI on the Jenkins agent."
+                        echo "Installation: curl https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip -o awscliv2.zip && unzip awscliv2.zip && sudo ./aws/install"
+                    else
+                        echo "AWS CLI: $(aws --version)"
                     fi
 
-                    # Install kubectl
+                    # Check kubectl
                     if ! command -v kubectl &> /dev/null; then
-                        echo "Installing kubectl..."
-                        sudo apt-get update
-                        sudo apt-get install -y ca-certificates curl
-                        curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
-                        sudo install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
-                        rm kubectl
+                        echo "WARNING: kubectl not found. Please install kubectl on the Jenkins agent."
+                        echo "Installation: curl -LO https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl && sudo install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl"
+                    else
+                        echo "kubectl: $(kubectl version --client --short 2>/dev/null || echo 'version check failed')"
+                    fi
+
+                    # Check Java
+                    if ! command -v java &> /dev/null; then
+                        echo "WARNING: Java not found. Please install Java (JDK 11 or higher) on the Jenkins agent."
+                    else
+                        echo "Java: $(java -version 2>&1 | head -n 1)"
                     fi
                 '''
             }
@@ -279,8 +274,8 @@ pipeline {
 
             sh '''
             if command -v docker &> /dev/null; then
-                docker image prune -f
-                docker system prune -f
+                docker image prune -f || echo "Docker prune failed, continuing..."
+                docker system prune -f || echo "Docker system prune failed, continuing..."
             else
                 echo "Docker not available, skipping cleanup"
             fi
