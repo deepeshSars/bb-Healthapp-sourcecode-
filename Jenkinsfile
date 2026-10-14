@@ -23,6 +23,58 @@ pipeline {
             }
         }
 
+        stage('Install Tools') {
+            steps {
+                sh '''
+                    # Install Maven
+                    if ! command -v mvn &> /dev/null; then
+                        echo "Installing Maven..."
+                        sudo apt-get update
+                        sudo apt-get install -y maven
+                    fi
+
+                    # Install Docker
+                    if ! command -v docker &> /dev/null; then
+                        echo "Installing Docker..."
+                        sudo apt-get update
+                        sudo apt-get install -y ca-certificates curl gnupg
+                        sudo install -m 0755 -d /etc/apt/keyrings
+                        curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+                        sudo chmod a+r /etc/apt/keyrings/docker.gpg
+                        echo \
+                          "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
+                          $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
+                          sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+                        sudo apt-get update
+                        sudo apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+                        sudo usermod -aG docker jenkins || true
+                        sudo systemctl start docker || true
+                    fi
+
+                    # Install AWS CLI
+                    if ! command -v aws &> /dev/null; then
+                        echo "Installing AWS CLI..."
+                        sudo apt-get update
+                        sudo apt-get install -y unzip
+                        curl "https://awscli.amazonaws.com/awscli-exe-linux-$(uname -m).zip" -o "awscliv2.zip"
+                        sudo unzip awscliv2.zip -d /tmp
+                        sudo /tmp/aws/install
+                        rm awscliv2.zip
+                    fi
+
+                    # Install kubectl
+                    if ! command -v kubectl &> /dev/null; then
+                        echo "Installing kubectl..."
+                        sudo apt-get update
+                        sudo apt-get install -y ca-certificates curl
+                        curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+                        sudo install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
+                        rm kubectl
+                    fi
+                '''
+            }
+        }
+
         stage('Verify Tools') {
             steps {
                 sh 'java -version'
@@ -225,10 +277,14 @@ pipeline {
 
         always {
 
-            sh """
-            docker image prune -f
-            docker system prune -f
-            """
+            sh '''
+            if command -v docker &> /dev/null; then
+                docker image prune -f
+                docker system prune -f
+            else
+                echo "Docker not available, skipping cleanup"
+            fi
+            '''
 
         }
 
