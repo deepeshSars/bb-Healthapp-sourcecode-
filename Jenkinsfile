@@ -80,13 +80,13 @@ pipeline {
                         chmod +x kubectl
                         mv kubectl $HOME/.local/bin/kubectl
                         export PATH=$HOME/.local/bin:$PATH
-                        echo "kubectl installed: $(kubectl version --client --short 2>/dev/null || echo 'version check failed')"
+                        echo "kubectl installed"
                     else
-                        echo "kubectl already installed: $(kubectl version --client --short 2>/dev/null || echo 'version check failed')"
+                        echo "kubectl already installed"
                     fi
 
                     # Check Docker (must be pre-installed with proper permissions)
-                    if command -v docker &> /dev/null; then
+                    if [ -f "/usr/bin/docker" ] || [ -f "/usr/local/bin/docker" ]; then
                         echo "Docker found: $(docker --version)"
                         # Test docker access
                         if docker info &> /dev/null; then
@@ -100,7 +100,7 @@ pipeline {
                     fi
 
                     # Check Java
-                    if ! command -v java &> /dev/null; then
+                    if [ ! -f "/usr/bin/java" ] && [ ! -f "/usr/local/bin/java" ] && [ ! -f "$HOME/.local/bin/java" ]; then
                         echo "ERROR: Java not found. Please install Java (JDK 11 or higher)."
                         exit 1
                     else
