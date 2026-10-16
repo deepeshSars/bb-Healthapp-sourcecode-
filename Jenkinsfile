@@ -2,334 +2,156 @@ pipeline {
     agent any
 
     environment {
+        REGISTRY = '591950085623.dkr.ecr.ap-south-1.amazonaws.com'
+        AWS_REGION = 'ap-south-1'
+        NAMESPACE = 'bbhealthapp'
+        IMAGE_TAG = "${env.BUILD_NUMBER}"
+    }
 
-        AWS_REGION = "ap-south-1"
-
-        // IMPORTANT: Update this to your actual AWS Account ID
-        // Find it in AWS Console under Account Settings
-        AWS_ACCOUNT_ID = "591950085623"
-
-        ECR_FRONTEND = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/bbhealthapp-frontend"
-        ECR_MASTER = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/bbhealthapp-master-service"
-        ECR_REGISTER = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/bbhealthapp-register-service"
-        ECR_DOCUMENT = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/bbhealthapp-document-service"
-
-        IMAGE_TAG = "${BUILD_NUMBER}"
-
-        // AWS credentials - set these in Jenkins job configuration or as environment variables
-        AWS_ACCESS_KEY_ID = credentials('aws-access-key-id')
-        AWS_SECRET_ACCESS_KEY = credentials('aws-secret-access-key')
-
-        // Add local bin to PATH for locally installed tools
-        PATH = "${env.HOME}/.local/bin:${env.HOME}/maven/bin:${env.PATH}"
+    options {
+        skipDefaultCheckout true
     }
 
     stages {
-
-        stage('Checkout') {
+        stage('Pull stage') {
             steps {
-                checkout scm
+                git branch: 'main', credentialsId: 'github-credentials', url: 'https://github.com/deepeshSars/bb-Healthapp-sourcecode-.git'
             }
         }
 
-        stage('Install Required Tools') {
+        stage('Build') {
             steps {
-                sh '''
-                    echo "Installing required tools if missing..."
+                echo "Building Docker images for BBHealthApp..."
 
-                    # Create local bin directory
-                    mkdir -p $HOME/.local/bin
-                    export PATH=$HOME/.local/bin:$PATH
+                // Build Master Service
+                dir('bbhealthapp-backend/bbhealthapp-api-master') {
+                    sh "docker build -t ${REGISTRY}/bbhealthapp-master-service:${IMAGE_TAG} -t ${REGISTRY}/bbhealthapp-master-service:latest ."
+                }
 
-                    # Install Maven if not found
-                    if [ ! -f "/usr/bin/mvn" ] && [ ! -f "$HOME/maven/bin/mvn" ] && [ ! -f "$HOME/.local/bin/mvn" ]; then
-                        echo "Installing Maven to user directory..."
-                        cd $HOME
-                        curl -O https://archive.apache.org/dist/maven/maven-3/3.9.5/binaries/apache-maven-3.9.5-bin.tar.gz
-                        tar -xzf apache-maven-3.9.5-bin.tar.gz
-                        mv apache-maven-3.9.5 maven
-                        rm apache-maven-3.9.5-bin.tar.gz
-                        export PATH=$HOME/maven/bin:$PATH
-                        echo "export PATH=$HOME/maven/bin:\$PATH" >> $HOME/.bashrc
-                        echo "Maven installed: $(mvn -version | head -n 1)"
-                    else
-                        echo "Maven already installed: $(mvn -version | head -n 1)"
-                    fi
+                // Build Register Service
+                dir('bbhealthapp-backend/bbhealthapp-api-register') {
+                    sh "docker build -t ${REGISTRY}/bbhealthapp-register-service:${IMAGE_TAG} -t ${REGISTRY}/bbhealthapp-register-service:latest ."
+                }
 
-                    # Install AWS CLI if not found
-                    if [ ! -f "/usr/bin/aws" ] && [ ! -f "$HOME/.local/bin/aws" ]; then
-                        echo "Installing AWS CLI to user directory..."
-                        cd /tmp
-                        curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
-                        # Use Python to unzip if unzip is not available
-                        if command -v unzip &> /dev/null; then
-                            unzip -q awscliv2.zip
-                        else
-                            python3 -m zipfile -e awscliv2.zip .
-                        fi
-                        ./aws/install -i $HOME/.aws-cli -b $HOME/.local/bin
-                        rm -rf aws awscliv2.zip
-                        export PATH=$HOME/.local/bin:$PATH
-                        echo "AWS CLI installed: $(aws --version)"
-                    else
-                        echo "AWS CLI already installed: $(aws --version)"
-                    fi
+                // Build Document Service
+                dir('bbhealthapp-backend/bbhealthapp-api-document') {
+                    sh "docker build -t ${REGISTRY}/bbhealthapp-document-service:${IMAGE_TAG} -t ${REGISTRY}/bbhealthapp-document-service:latest ."
+                }
 
-                    # Install kubectl if not found
-                    if [ ! -f "/usr/bin/kubectl" ] && [ ! -f "/usr/local/bin/kubectl" ] && [ ! -f "$HOME/.local/bin/kubectl" ]; then
-                        echo "Installing kubectl to user directory..."
-                        curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
-                        chmod +x kubectl
-                        mv kubectl $HOME/.local/bin/kubectl
-                        export PATH=$HOME/.local/bin:$PATH
-                        echo "kubectl installed"
-                    else
-                        echo "kubectl already installed"
-                    fi
-
-                    # Check Docker (must be pre-installed with proper permissions)
-                    if [ -f "/usr/bin/docker" ] || [ -f "/usr/local/bin/docker" ]; then
-                        echo "Docker found: $(docker --version)"
-                        # Test docker access
-                        if docker info &> /dev/null; then
-                            echo "Docker access confirmed"
-                        else
-                            echo "WARNING: Jenkins user cannot access Docker. Please run: sudo usermod -aG docker jenkins && sudo systemctl restart jenkins"
-                        fi
-                    else
-                        echo "ERROR: Docker not found. Please install Docker manually."
-                        exit 1
-                    fi
-
-                    # Check Java
-                    if [ ! -f "/usr/bin/java" ] && [ ! -f "/usr/local/bin/java" ] && [ ! -f "$HOME/.local/bin/java" ]; then
-                        echo "ERROR: Java not found. Please install Java (JDK 11 or higher)."
-                        exit 1
-                    else
-                        echo "Java: $(java -version 2>&1 | head -n 1)"
-                    fi
-
-                    # Add local bin to PATH for subsequent stages
-                    echo "export PATH=$HOME/.local/bin:$HOME/maven/bin:\$PATH" > $WORKSPACE/env_vars
-                '''
-            }
-        }
-
-
-
-        stage('Login to AWS ECR') {
-            steps {
-                sh """
-                export AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
-                export AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
-
-                # Login to ECR
-                echo "Logging into ECR..."
-                aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com
-
-                # Verify login succeeded
-                if [ \$? -eq 0 ]; then
-                    echo "ECR login successful"
-                else
-                    echo "ERROR: ECR login failed"
-                    exit 1
-                fi
-                """
+                // Build Frontend
+                dir('bbhealthapp-frontend') {
+                    sh "docker build -t ${REGISTRY}/bbhealthapp-frontend:${IMAGE_TAG} -t ${REGISTRY}/bbhealthapp-frontend:latest ."
+                }
             }
         }
 
         stage('Create ECR Repositories') {
             steps {
-                sh """
-                export AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
-                export AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
-
-                # Create ECR repositories if they don't exist
-                echo "Checking/Creating ECR repositories..."
-
-                for repo in bbhealthapp-frontend bbhealthapp-master-service bbhealthapp-register-service bbhealthapp-document-service; do
-                    if aws ecr describe-repositories --repository-names \$repo --region ${AWS_REGION} 2>/dev/null; then
-                        echo "Repository \$repo already exists"
-                    else
-                        echo "Creating repository \$repo..."
-                        aws ecr create-repository --repository-name \$repo --region ${AWS_REGION} || echo "Failed to create \$repo (may already exist)"
-                    fi
-                done
-                """
+                withCredentials([usernamePassword(credentialsId: 'aws-credentials', usernameVariable: 'AWS_ACCESS_KEY_ID', passwordVariable: 'AWS_SECRET_ACCESS_KEY')]) {
+                    sh """
+                        export AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+                        export AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+                        aws ecr describe-repositories --repository-names bbhealthapp-master-service --region ${AWS_REGION} || \
+                        aws ecr create-repository --repository-name bbhealthapp-master-service --region ${AWS_REGION}
+                        aws ecr describe-repositories --repository-names bbhealthapp-register-service --region ${AWS_REGION} || \
+                        aws ecr create-repository --repository-name bbhealthapp-register-service --region ${AWS_REGION}
+                        aws ecr describe-repositories --repository-names bbhealthapp-document-service --region ${AWS_REGION} || \
+                        aws ecr create-repository --repository-name bbhealthapp-document-service --region ${AWS_REGION}
+                        aws ecr describe-repositories --repository-names bbhealthapp-frontend --region ${AWS_REGION} || \
+                        aws ecr create-repository --repository-name bbhealthapp-frontend --region ${AWS_REGION}
+                    """
+                }
             }
         }
 
-        stage('Build Frontend Image') {
-
+        stage('Push stage') {
             steps {
-
-                dir('bbhealthapp-frontend') {
-
+                withCredentials([usernamePassword(credentialsId: 'aws-credentials', usernameVariable: 'AWS_ACCESS_KEY_ID', passwordVariable: 'AWS_SECRET_ACCESS_KEY')]) {
                     sh """
-                    docker build -t ${ECR_FRONTEND}:${IMAGE_TAG} .
+                        export AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+                        export AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+                        aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${REGISTRY}
                     """
-
                 }
 
+                sh "docker push ${REGISTRY}/bbhealthapp-master-service:${IMAGE_TAG}"
+                sh "docker push ${REGISTRY}/bbhealthapp-master-service:latest"
+                sh "docker push ${REGISTRY}/bbhealthapp-register-service:${IMAGE_TAG}"
+                sh "docker push ${REGISTRY}/bbhealthapp-register-service:latest"
+                sh "docker push ${REGISTRY}/bbhealthapp-document-service:${IMAGE_TAG}"
+                sh "docker push ${REGISTRY}/bbhealthapp-document-service:latest"
+                sh "docker push ${REGISTRY}/bbhealthapp-frontend:${IMAGE_TAG}"
+                sh "docker push ${REGISTRY}/bbhealthapp-frontend:latest"
             }
-
         }
 
-        stage('Build Master Service') {
-
+        stage('Cleanup') {
             steps {
-
-                dir('bbhealthapp-backend/bbhealthapp-api-master') {
-
-                    sh 'mvn clean package -DskipTests'
-
-                    sh """
-                    docker build -t ${ECR_MASTER}:${IMAGE_TAG} .
-                    """
-
-                }
-
+                echo "Cleaning up Docker images to free disk space..."
+                sh "docker rmi ${REGISTRY}/bbhealthapp-master-service:${IMAGE_TAG} || true"
+                sh "docker rmi ${REGISTRY}/bbhealthapp-master-service:latest || true"
+                sh "docker rmi ${REGISTRY}/bbhealthapp-register-service:${IMAGE_TAG} || true"
+                sh "docker rmi ${REGISTRY}/bbhealthapp-register-service:latest || true"
+                sh "docker rmi ${REGISTRY}/bbhealthapp-document-service:${IMAGE_TAG} || true"
+                sh "docker rmi ${REGISTRY}/bbhealthapp-document-service:latest || true"
+                sh "docker rmi ${REGISTRY}/bbhealthapp-frontend:${IMAGE_TAG} || true"
+                sh "docker rmi ${REGISTRY}/bbhealthapp-frontend:latest || true"
+                sh 'docker logout ${REGISTRY} || true'
             }
-
         }
-
-        stage('Build Register Service') {
-
-            steps {
-
-                dir('bbhealthapp-backend/bbhealthapp-api-register') {
-
-                    sh 'mvn clean package -DskipTests'
-
-                    sh """
-                    docker build -t ${ECR_REGISTER}:${IMAGE_TAG} .
-                    """
-
-                }
-
-            }
-
-        }
-
-        stage('Build Document Service') {
-
-            steps {
-
-                dir('bbhealthapp-backend/bbhealthapp-api-document') {
-
-                    sh 'mvn clean package -DskipTests'
-
-                    sh """
-                    docker build -t ${ECR_DOCUMENT}:${IMAGE_TAG} .
-                    """
-
-                }
-
-            }
-
-        }
-
-        stage('Push Images to ECR') {
-
-            steps {
-
-                sh """
-                echo "Pushing images to ECR..."
-
-                docker push ${ECR_FRONTEND}:${IMAGE_TAG} || echo "Failed to push frontend image"
-                docker push ${ECR_MASTER}:${IMAGE_TAG} || echo "Failed to push master service image"
-                docker push ${ECR_REGISTER}:${IMAGE_TAG} || echo "Failed to push register service image"
-                docker push ${ECR_DOCUMENT}:${IMAGE_TAG} || echo "Failed to push document service image"
-
-                echo "Image push completed"
-                """
-
-            }
-
-        }
-
-        stage('Update Kubeconfig') {
-
-            steps {
-                sh """
-                export AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
-                export AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
-                aws eks update-kubeconfig \\
-                --region ${AWS_REGION} \\
-                --name bbhealthapp-dev
-                """
-            }
-
-        }
+      
         stage('Deploy to Kubernetes') {
-
             steps {
-                sh """
-                export AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
-                export AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
-                kubectl apply -f k8s/namespace.yaml
-                kubectl apply -f k8s/configmap.yaml
-                kubectl apply -f k8s/secret.yaml
+                echo "Deploying to Kubernetes cluster..."
 
-                kubectl apply -f k8s/master-service-deployment.yaml
-                kubectl apply -f k8s/register-service-deployment.yaml
-                kubectl apply -f k8s/document-service-deployment.yaml
-                kubectl apply -f k8s/frontend-deployment.yaml
-                kubectl apply -f k8s/ingress.yaml
-                """
+                dir('k8s') {
+                    // Update image references in deployment files
+                    sh """
+                        sed -i 's|image: .*bbhealthapp-master-service.*|image: ${REGISTRY}/bbhealthapp-master-service:${IMAGE_TAG}|g' master-service-deployment.yaml
+                        sed -i 's|image: .*bbhealthapp-register-service.*|image: ${REGISTRY}/bbhealthapp-register-service:${IMAGE_TAG}|g' register-service-deployment.yaml
+                        sed -i 's|image: .*bbhealthapp-document-service.*|image: ${REGISTRY}/bbhealthapp-document-service:${IMAGE_TAG}|g' document-service-deployment.yaml
+                        sed -i 's|image: .*bbhealthapp-frontend.*|image: ${REGISTRY}/bbhealthapp-frontend:${IMAGE_TAG}|g' frontend-deployment.yaml
+                        sed -i 's|imagePullPolicy: Never|imagePullPolicy: IfNotPresent|g' *.yaml
+                    """
+
+                    // Apply base configurations and persistent storage
+                    sh 'kubectl apply -f namespace.yaml'
+                    sh 'kubectl apply -f configmap.yaml'
+                    sh 'kubectl apply -f secret.yaml'
+                    sh 'kubectl apply -f pvc.yaml'
+
+                    // Deploy backend and frontend microservices
+                    sh 'kubectl apply -f master-service-deployment.yaml'
+                    sh 'kubectl apply -f register-service-deployment.yaml'
+                    sh 'kubectl apply -f document-service-deployment.yaml'
+                    sh 'kubectl apply -f frontend-deployment.yaml'
+                    sh 'kubectl apply -f ingress.yaml'
+
+                    // Wait for deployments to be ready
+                    sh "kubectl rollout status deployment/master-service -n ${NAMESPACE} --timeout=300s"
+                    sh "kubectl rollout status deployment/register-service -n ${NAMESPACE} --timeout=300s"
+                    sh "kubectl rollout status deployment/document-service -n ${NAMESPACE} --timeout=300s"
+                    sh "kubectl rollout status deployment/frontend -n ${NAMESPACE} --timeout=300s"
+                }
             }
-
         }
 
-        stage('Verify Deployment') {
-
+        stage('Verify') {
             steps {
-                sh """
-                export AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
-                export AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
-                kubectl get nodes
-                kubectl get pods -n bbhealthapp
-                kubectl get svc -n bbhealthapp
-                kubectl get ingress -n bbhealthapp
-                """
+                echo "Verifying Kubernetes deployment..."
+                sh "kubectl get pods -n ${NAMESPACE}"
+                sh "kubectl get services -n ${NAMESPACE}"
+                sh "kubectl get ingress -n ${NAMESPACE}"
             }
-
         }
-
     }
 
     post {
-
         success {
-
-            echo '========================================'
-            echo 'BUILD AND DEPLOYMENT SUCCESSFUL'
-            echo '========================================'
-
+            echo "BBHealthApp deployment to Kubernetes completed successfully!"
         }
-
         failure {
-
-            echo '========================================'
-            echo 'BUILD OR DEPLOYMENT FAILED'
-            echo '========================================'
-
+            echo "BBHealthApp deployment failed. Check logs for details."
         }
-
-        always {
-
-            sh '''
-            if command -v docker &> /dev/null; then
-                # Try Docker cleanup but don't fail on permission errors
-                docker image prune -f 2>/dev/null || echo "Docker prune skipped (permission denied or no access)"
-                docker system prune -f 2>/dev/null || echo "Docker system prune skipped (permission denied or no access)"
-            else
-                echo "Docker not available, skipping cleanup"
-            fi
-            '''
-
-        }
-
     }
-
 }
