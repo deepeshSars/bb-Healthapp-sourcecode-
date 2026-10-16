@@ -1,6 +1,11 @@
 pipeline {
     agent any
 
+    options {
+        // Discard old builds to save space
+        buildDiscarder(logRotator(numToKeepStr: '5', artifactNumToKeepStr: '3'))
+    }
+
     environment {
 
         AWS_REGION = "ap-south-1"
@@ -21,43 +26,77 @@ pipeline {
 
     stages {
 
-        stage('Checkout') {
+        stage('Pre-Build Cleanup') {
             steps {
-                checkout scm
+                sh '''
+                    echo "========================================"
+                    echo "INITIAL DISK SPACE CHECK"
+                    echo "========================================"
+                    df -h
+
+                    echo ""
+                    echo "========================================"
+                    echo "AGGRESSIVE DISK CLEANUP"
+                    echo "========================================"
+
+                    # Clean Docker (most aggressive)
+                    if command -v docker &> /dev/null; then
+                        echo "Cleaning Docker..."
+                        docker system prune -af --volumes || echo "Docker prune failed"
+                        docker image prune -af || echo "Docker image prune failed"
+                    fi
+
+                    # Clean Jenkins workspace (current workspace)
+                    echo "Cleaning current workspace..."
+                    rm -rf ./* || echo "Workspace cleanup failed"
+
+                    # Clean other Jenkins workspaces
+                    if [ -d /var/lib/jenkins/workspace ]; then
+                        echo "Cleaning old Jenkins workspaces..."
+                        find /var/lib/jenkins/workspace -mindepth 1 -maxdepth 1 -type d ! -name "$(basename $WORKSPACE)" -exec rm -rf {} + 2>/dev/null || echo "Other workspace cleanup failed"
+                    fi
+
+                    # Clean Jenkins logs
+                    if [ -d /var/lib/jenkins/logs ]; then
+                        echo "Cleaning Jenkins logs..."
+                        find /var/lib/jenkins/logs -type f -mtime +3 -delete 2>/dev/null || echo "Log cleanup failed"
+                    fi
+
+                    # Clean Jenkins cache
+                    if [ -d /var/lib/jenkins/cache ]; then
+                        echo "Cleaning Jenkins cache..."
+                        find /var/lib/jenkins/cache -type f -mtime +7 -delete 2>/dev/null || echo "Cache cleanup failed"
+                    fi
+
+                    # Clean Maven local repository
+                    if [ -d ~/.m2/repository ]; then
+                        echo "Cleaning Maven repository..."
+                        find ~/.m2/repository -type f -mtime +7 -delete 2>/dev/null || echo "Maven cleanup failed"
+                    fi
+
+                    # Clean temporary files
+                    echo "Cleaning temp files..."
+                    rm -rf /tmp/* 2>/dev/null || echo "Temp cleanup failed"
+
+                    # Clean system cache
+                    if command -v apt-get &> /dev/null; then
+                        echo "Cleaning apt cache..."
+                        apt-get clean || echo "Apt clean failed"
+                        apt-get autoclean || echo "Apt autoclean failed"
+                    fi
+
+                    echo ""
+                    echo "========================================"
+                    echo "DISK SPACE AFTER CLEANUP"
+                    echo "========================================"
+                    df -h
+                '''
             }
         }
 
-        stage('Clean Disk Space') {
+        stage('Checkout') {
             steps {
-                sh '''
-                    echo "Cleaning up disk space before build..."
-                    
-                    # Clean Docker
-                    if command -v docker &> /dev/null; then
-                        docker system prune -af --volumes || echo "Docker prune failed, continuing..."
-                    fi
-                    
-                    # Clean Maven local repository old artifacts (keep last 30 days)
-                    if [ -d ~/.m2/repository ]; then
-                        find ~/.m2/repository -type f -mtime +30 -delete || echo "Maven cleanup failed, continuing..."
-                    fi
-                    
-                    # Clean old Jenkins workspaces (keep last 7 days)
-                    if [ -d /var/lib/jenkins/workspace ]; then
-                        find /var/lib/jenkins/workspace -type d -mtime +7 -exec rm -rf {} + 2>/dev/null || echo "Workspace cleanup failed, continuing..."
-                    fi
-                    
-                    # Clean old Jenkins builds
-                    if [ -d /var/lib/jenkins/jobs ]; then
-                        find /var/lib/jenkins/jobs -type d -name "builds" -mtime +7 -exec rm -rf {} + 2>/dev/null || echo "Builds cleanup failed, continuing..."
-                    fi
-                    
-                    # Clean temporary files
-                    rm -rf /tmp/* 2>/dev/null || echo "Temp cleanup failed, continuing..."
-                    
-                    # Check disk space
-                    df -h
-                '''
+                checkout scm
             }
         }
 
@@ -115,6 +154,10 @@ pipeline {
                 sh 'docker --version'
                 sh 'aws --version'
                 sh 'kubectl version --client'
+                sh 'echo "========================================"'
+                sh 'echo "DISK SPACE AFTER TOOL CHECK"'
+                sh 'echo "========================================"'
+                sh 'df -h'
             }
         }
 
@@ -143,7 +186,13 @@ pipeline {
             }
             post {
                 always {
-                    sh 'docker system prune -f || echo "Docker prune failed, continuing..."'
+                    sh '''
+                        docker system prune -f || echo "Docker prune failed, continuing..."
+                        echo "========================================"
+                        echo "DISK SPACE AFTER FRONTEND BUILD"
+                        echo "========================================"
+                        df -h
+                    '''
                 }
             }
 
@@ -166,7 +215,13 @@ pipeline {
             }
             post {
                 always {
-                    sh 'docker system prune -f || echo "Docker prune failed, continuing..."'
+                    sh '''
+                        docker system prune -f || echo "Docker prune failed, continuing..."
+                        echo "========================================"
+                        echo "DISK SPACE AFTER MASTER BUILD"
+                        echo "========================================"
+                        df -h
+                    '''
                 }
             }
 
@@ -189,7 +244,13 @@ pipeline {
             }
             post {
                 always {
-                    sh 'docker system prune -f || echo "Docker prune failed, continuing..."'
+                    sh '''
+                        docker system prune -f || echo "Docker prune failed, continuing..."
+                        echo "========================================"
+                        echo "DISK SPACE AFTER REGISTER BUILD"
+                        echo "========================================"
+                        df -h
+                    '''
                 }
             }
 
@@ -212,7 +273,13 @@ pipeline {
             }
             post {
                 always {
-                    sh 'docker system prune -f || echo "Docker prune failed, continuing..."'
+                    sh '''
+                        docker system prune -f || echo "Docker prune failed, continuing..."
+                        echo "========================================"
+                        echo "DISK SPACE AFTER DOCUMENT BUILD"
+                        echo "========================================"
+                        df -h
+                    '''
                 }
             }
 
@@ -229,6 +296,16 @@ pipeline {
                 docker push ${ECR_DOCUMENT}:${IMAGE_TAG}
                 """
 
+            }
+            post {
+                always {
+                    sh '''
+                        echo "========================================"
+                        echo "DISK SPACE AFTER PUSH"
+                        echo "========================================"
+                        df -h
+                    '''
+                }
             }
 
         }
@@ -272,11 +349,56 @@ pipeline {
                 sh """
                 export AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
                 export AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+
+                echo "========================================"
+                echo "DEPLOYMENT VERIFICATION"
+                echo "========================================"
+
+                echo ""
+                echo "1. Checking Kubernetes Nodes..."
                 kubectl get nodes
+
+                echo ""
+                echo "2. Checking Pods in bbhealthapp namespace..."
                 kubectl get pods -n bbhealthapp
+
+                echo ""
+                echo "3. Checking Services in bbhealthapp namespace..."
                 kubectl get svc -n bbhealthapp
+
+                echo ""
+                echo "4. Checking Ingress in bbhealthapp namespace..."
                 kubectl get ingress -n bbhealthapp
+
+                echo ""
+                echo "5. Verifying all pods are running..."
+                POD_STATUS=\$(kubectl get pods -n bbhealthapp -o jsonpath='{.items[*].status.phase}')
+                if echo "\$POD_STATUS" | grep -v "Running"; then
+                    echo "WARNING: Some pods are not in Running state"
+                    kubectl get pods -n bbhealthapp
+                else
+                    echo "SUCCESS: All pods are running"
+                fi
+
+                echo ""
+                echo "6. Checking pod restart counts..."
+                kubectl get pods -n bbhealthapp
+
+                echo ""
+                echo "========================================"
+                echo "DEPLOYMENT VERIFICATION COMPLETE"
+                echo "========================================"
                 """
+            }
+            post {
+                always {
+                    sh '''
+                        echo "========================================"
+                        echo "FINAL DISK SPACE CHECK"
+                        echo "========================================"
+                        df -h
+                    '''
+                }
             }
 
         }
@@ -289,6 +411,20 @@ pipeline {
 
             echo '========================================'
             echo 'BUILD AND DEPLOYMENT SUCCESSFUL'
+            echo '========================================'
+            echo ''
+            echo 'To verify deployment:'
+            echo '1. Check Jenkins console output - look for "SUCCESS: All pods are running"'
+            echo '2. All pods in bbhealthapp namespace should show "Running" status'
+            echo '3. Pod restart counts should be 0 or low'
+            echo '4. Ingress should show proper addresses'
+            echo '5. Access your application via the Ingress URL'
+            echo ''
+            echo 'Kubernetes commands to check manually:'
+            echo '  kubectl get pods -n bbhealthapp'
+            echo '  kubectl get svc -n bbhealthapp'
+            echo '  kubectl get ingress -n bbhealthapp'
+            echo '  kubectl logs -n bbhealthapp <pod-name>'
             echo '========================================'
 
         }
