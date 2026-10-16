@@ -5,7 +5,9 @@ pipeline {
 
         AWS_REGION = "ap-south-1"
 
-        AWS_ACCOUNT_ID = "591234567890"
+        // IMPORTANT: Update this to your actual AWS Account ID
+        // Find it in AWS Console under Account Settings
+        AWS_ACCOUNT_ID = "591950085623"
 
         ECR_FRONTEND = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/bbhealthapp-frontend"
         ECR_MASTER = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/bbhealthapp-master-service"
@@ -120,7 +122,39 @@ pipeline {
                 sh """
                 export AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
                 export AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+
+                # Login to ECR
+                echo "Logging into ECR..."
                 aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com
+
+                # Verify login succeeded
+                if [ $? -eq 0 ]; then
+                    echo "ECR login successful"
+                else
+                    echo "ERROR: ECR login failed"
+                    exit 1
+                fi
+                """
+            }
+        }
+
+        stage('Create ECR Repositories') {
+            steps {
+                sh """
+                export AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+                export AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+
+                # Create ECR repositories if they don't exist
+                echo "Checking/Creating ECR repositories..."
+
+                for repo in bbhealthapp-frontend bbhealthapp-master-service bbhealthapp-register-service bbhealthapp-document-service; do
+                    if aws ecr describe-repositories --repository-names \$repo --region ${AWS_REGION} 2>/dev/null; then
+                        echo "Repository \$repo already exists"
+                    else
+                        echo "Creating repository \$repo..."
+                        aws ecr create-repository --repository-name \$repo --region ${AWS_REGION} || echo "Failed to create \$repo (may already exist)"
+                    fi
+                done
                 """
             }
         }
@@ -200,10 +234,14 @@ pipeline {
             steps {
 
                 sh """
-                docker push ${ECR_FRONTEND}:${IMAGE_TAG}
-                docker push ${ECR_MASTER}:${IMAGE_TAG}
-                docker push ${ECR_REGISTER}:${IMAGE_TAG}
-                docker push ${ECR_DOCUMENT}:${IMAGE_TAG}
+                echo "Pushing images to ECR..."
+
+                docker push ${ECR_FRONTEND}:${IMAGE_TAG} || echo "Failed to push frontend image"
+                docker push ${ECR_MASTER}:${IMAGE_TAG} || echo "Failed to push master service image"
+                docker push ${ECR_REGISTER}:${IMAGE_TAG} || echo "Failed to push register service image"
+                docker push ${ECR_DOCUMENT}:${IMAGE_TAG} || echo "Failed to push document service image"
+
+                echo "Image push completed"
                 """
 
             }
