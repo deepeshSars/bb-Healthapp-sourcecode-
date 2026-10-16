@@ -186,13 +186,19 @@ pipeline {
             }
             post {
                 always {
-                    sh '''
-                        docker system prune -f || echo "Docker prune failed, continuing..."
-                        echo "========================================"
-                        echo "DISK SPACE AFTER FRONTEND BUILD"
-                        echo "========================================"
-                        df -h
-                    '''
+                    script {
+                        try {
+                            sh '''
+                                docker system prune -f || echo "Docker prune failed, continuing..."
+                                echo "========================================"
+                                echo "DISK SPACE AFTER FRONTEND BUILD"
+                                echo "========================================"
+                                df -h
+                            '''
+                        } catch (Exception e) {
+                            echo "Post-build cleanup failed: ${e.getMessage()}"
+                        }
+                    }
                 }
             }
 
@@ -215,13 +221,19 @@ pipeline {
             }
             post {
                 always {
-                    sh '''
-                        docker system prune -f || echo "Docker prune failed, continuing..."
-                        echo "========================================"
-                        echo "DISK SPACE AFTER MASTER BUILD"
-                        echo "========================================"
-                        df -h
-                    '''
+                    script {
+                        try {
+                            sh '''
+                                docker system prune -f || echo "Docker prune failed, continuing..."
+                                echo "========================================"
+                                echo "DISK SPACE AFTER MASTER BUILD"
+                                echo "========================================"
+                                df -h
+                            '''
+                        } catch (Exception e) {
+                            echo "Post-build cleanup failed: ${e.getMessage()}"
+                        }
+                    }
                 }
             }
 
@@ -244,13 +256,19 @@ pipeline {
             }
             post {
                 always {
-                    sh '''
-                        docker system prune -f || echo "Docker prune failed, continuing..."
-                        echo "========================================"
-                        echo "DISK SPACE AFTER REGISTER BUILD"
-                        echo "========================================"
-                        df -h
-                    '''
+                    script {
+                        try {
+                            sh '''
+                                docker system prune -f || echo "Docker prune failed, continuing..."
+                                echo "========================================"
+                                echo "DISK SPACE AFTER REGISTER BUILD"
+                                echo "========================================"
+                                df -h
+                            '''
+                        } catch (Exception e) {
+                            echo "Post-build cleanup failed: ${e.getMessage()}"
+                        }
+                    }
                 }
             }
 
@@ -273,13 +291,19 @@ pipeline {
             }
             post {
                 always {
-                    sh '''
-                        docker system prune -f || echo "Docker prune failed, continuing..."
-                        echo "========================================"
-                        echo "DISK SPACE AFTER DOCUMENT BUILD"
-                        echo "========================================"
-                        df -h
-                    '''
+                    script {
+                        try {
+                            sh '''
+                                docker system prune -f || echo "Docker prune failed, continuing..."
+                                echo "========================================"
+                                echo "DISK SPACE AFTER DOCUMENT BUILD"
+                                echo "========================================"
+                                df -h
+                            '''
+                        } catch (Exception e) {
+                            echo "Post-build cleanup failed: ${e.getMessage()}"
+                        }
+                    }
                 }
             }
 
@@ -299,12 +323,18 @@ pipeline {
             }
             post {
                 always {
-                    sh '''
-                        echo "========================================"
-                        echo "DISK SPACE AFTER PUSH"
-                        echo "========================================"
-                        df -h
-                    '''
+                    script {
+                        try {
+                            sh '''
+                                echo "========================================"
+                                echo "DISK SPACE AFTER PUSH"
+                                echo "========================================"
+                                df -h
+                            '''
+                        } catch (Exception e) {
+                            echo "Post-push cleanup failed: ${e.getMessage()}"
+                        }
+                    }
                 }
             }
 
@@ -392,12 +422,18 @@ pipeline {
             }
             post {
                 always {
-                    sh '''
-                        echo "========================================"
-                        echo "FINAL DISK SPACE CHECK"
-                        echo "========================================"
-                        df -h
-                    '''
+                    script {
+                        try {
+                            sh '''
+                                echo "========================================"
+                                echo "FINAL DISK SPACE CHECK"
+                                echo "========================================"
+                                df -h
+                            '''
+                        } catch (Exception e) {
+                            echo "Final disk space check failed: ${e.getMessage()}"
+                        }
+                    }
                 }
             }
 
@@ -438,16 +474,20 @@ pipeline {
         }
 
         always {
-
-            sh '''
-            if command -v docker &> /dev/null; then
-                docker image prune -f || echo "Docker prune failed, continuing..."
-                docker system prune -f || echo "Docker system prune failed, continuing..."
-            else
-                echo "Docker not available, skipping cleanup"
-            fi
-            '''
-
+            script {
+                try {
+                    sh '''
+                    if command -v docker &> /dev/null; then
+                        docker image prune -f || echo "Docker prune failed, continuing..."
+                        docker system prune -f || echo "Docker system prune failed, continuing..."
+                    else
+                        echo "Docker not available, skipping cleanup"
+                    fi
+                    '''
+                } catch (Exception e) {
+                    echo "Cleanup skipped (no node context or other error): ${e.getMessage()}"
+                }
+            }
         }
 
     }
