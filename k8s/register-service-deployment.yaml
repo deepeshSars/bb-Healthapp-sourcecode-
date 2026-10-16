@@ -25,7 +25,7 @@ spec:
         - name: bbhealthapp-ecr-secret
       containers:
         - name: register-service
-          image: 591950085623.dkr.ecr.ap-south-1.amazonaws.com/bbhealthapp-dev-register-service:dipu12
+          image: 591950085623.dkr.ecr.ap-south-1.amazonaws.com/bbhealthapp-register-service:latest
           imagePullPolicy: Always
           ports:
             - containerPort: 8082

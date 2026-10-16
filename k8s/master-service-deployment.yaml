@@ -25,7 +25,7 @@ spec:
         - name: bbhealthapp-ecr-secret
       containers:
         - name: master-service
-          image: 591950085623.dkr.ecr.ap-south-1.amazonaws.com/bbhealthapp-dev-master-service:latest
+          image: 591950085623.dkr.ecr.ap-south-1.amazonaws.com/bbhealthapp-master-service:latest
           imagePullPolicy: Always
           ports:
             - containerPort: 8081
