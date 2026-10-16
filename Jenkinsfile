@@ -40,7 +40,7 @@ pipeline {
                     export PATH=$HOME/.local/bin:$PATH
 
                     # Install Maven if not found
-                    if ! command -v mvn &> /dev/null; then
+                    if [ ! -f "/usr/bin/mvn" ] && [ ! -f "$HOME/maven/bin/mvn" ] && [ ! -f "$HOME/.local/bin/mvn" ]; then
                         echo "Installing Maven to user directory..."
                         cd $HOME
                         curl -O https://archive.apache.org/dist/maven/maven-3/3.9.5/binaries/apache-maven-3.9.5-bin.tar.gz
@@ -55,7 +55,7 @@ pipeline {
                     fi
 
                     # Install AWS CLI if not found
-                    if ! command -v aws &> /dev/null; then
+                    if [ ! -f "/usr/bin/aws" ] && [ ! -f "$HOME/.local/bin/aws" ]; then
                         echo "Installing AWS CLI to user directory..."
                         cd /tmp
                         curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
@@ -74,7 +74,7 @@ pipeline {
                     fi
 
                     # Install kubectl if not found
-                    if ! command -v kubectl &> /dev/null; then
+                    if [ ! -f "/usr/bin/kubectl" ] && [ ! -f "/usr/local/bin/kubectl" ] && [ ! -f "$HOME/.local/bin/kubectl" ]; then
                         echo "Installing kubectl to user directory..."
                         curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
                         chmod +x kubectl
