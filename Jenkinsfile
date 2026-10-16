@@ -59,7 +59,12 @@ pipeline {
                         echo "Installing AWS CLI to user directory..."
                         cd /tmp
                         curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
-                        unzip -q awscliv2.zip
+                        # Use Python to unzip if unzip is not available
+                        if command -v unzip &> /dev/null; then
+                            unzip -q awscliv2.zip
+                        else
+                            python3 -m zipfile -e awscliv2.zip .
+                        fi
                         ./aws/install -i $HOME/.aws-cli -b $HOME/.local/bin
                         rm -rf aws awscliv2.zip
                         export PATH=$HOME/.local/bin:$PATH
