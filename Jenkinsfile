@@ -128,7 +128,7 @@ pipeline {
                 aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com
 
                 # Verify login succeeded
-                if [ $? -eq 0 ]; then
+                if [ \$? -eq 0 ]; then
                     echo "ECR login successful"
                 else
                     echo "ERROR: ECR login failed"
