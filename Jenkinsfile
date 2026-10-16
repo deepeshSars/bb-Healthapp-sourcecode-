@@ -27,46 +27,55 @@ pipeline {
             }
         }
 
-        stage('Check Required Tools') {
+        stage('Install Required Tools') {
             steps {
                 sh '''
-                    echo "Checking for required tools..."
-                    
-                    # Check Maven
+                    echo "Installing required tools if missing..."
+
+                    # Install Maven if not found
                     if ! command -v mvn &> /dev/null; then
-                        echo "WARNING: Maven not found. Please install Maven on the Jenkins agent."
-                        echo "Installation: sudo apt-get install -y maven"
+                        echo "Installing Maven..."
+                        sudo apt-get update
+                        sudo apt-get install -y maven
                     else
-                        echo "Maven: $(mvn -version | head -n 1)"
+                        echo "Maven already installed: $(mvn -version | head -n 1)"
                     fi
 
-                    # Check Docker
-                    if ! command -v docker &> /dev/null; then
-                        echo "WARNING: Docker not found. Please install Docker on the Jenkins agent."
-                        echo "Follow instructions at: https://docs.docker.com/engine/install/"
-                    else
-                        echo "Docker: $(docker --version)"
-                    fi
-
-                    # Check AWS CLI
+                    # Install AWS CLI if not found
                     if ! command -v aws &> /dev/null; then
-                        echo "WARNING: AWS CLI not found. Please install AWS CLI on the Jenkins agent."
-                        echo "Installation: curl https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip -o awscliv2.zip && unzip awscliv2.zip && sudo ./aws/install"
+                        echo "Installing AWS CLI..."
+                        curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
+                        unzip awscliv2.zip
+                        sudo ./aws/install
+                        rm -rf aws awscliv2.zip
                     else
-                        echo "AWS CLI: $(aws --version)"
+                        echo "AWS CLI already installed: $(aws --version)"
                     fi
 
-                    # Check kubectl
+                    # Install kubectl if not found
                     if ! command -v kubectl &> /dev/null; then
-                        echo "WARNING: kubectl not found. Please install kubectl on the Jenkins agent."
-                        echo "Installation: curl -LO https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl && sudo install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl"
+                        echo "Installing kubectl..."
+                        curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+                        sudo install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
+                        rm kubectl
                     else
-                        echo "kubectl: $(kubectl version --client --short 2>/dev/null || echo 'version check failed')"
+                        echo "kubectl already installed: $(kubectl version --client --short 2>/dev/null || echo 'version check failed')"
+                    fi
+
+                    # Fix Docker permissions
+                    if command -v docker &> /dev/null; then
+                        echo "Configuring Docker permissions..."
+                        sudo usermod -aG docker jenkins 2>/dev/null || echo "Usermod failed (may need manual intervention)"
+                        echo "Docker: $(docker --version)"
+                    else
+                        echo "ERROR: Docker not found. Please install Docker manually."
+                        exit 1
                     fi
 
                     # Check Java
                     if ! command -v java &> /dev/null; then
-                        echo "WARNING: Java not found. Please install Java (JDK 11 or higher) on the Jenkins agent."
+                        echo "ERROR: Java not found. Please install Java (JDK 11 or higher)."
+                        exit 1
                     else
                         echo "Java: $(java -version 2>&1 | head -n 1)"
                     fi
@@ -74,15 +83,7 @@ pipeline {
             }
         }
 
-        stage('Verify Tools') {
-            steps {
-                sh 'java -version'
-                sh 'mvn -version'
-                sh 'docker --version'
-                sh 'aws --version'
-                sh 'kubectl version --client'
-            }
-        }
+
 
         stage('Login to AWS ECR') {
             steps {
