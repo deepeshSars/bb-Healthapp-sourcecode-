@@ -17,6 +17,9 @@ pipeline {
         // AWS credentials - set these in Jenkins job configuration or as environment variables
         AWS_ACCESS_KEY_ID = credentials('aws-access-key-id')
         AWS_SECRET_ACCESS_KEY = credentials('aws-secret-access-key')
+
+        // Add local bin to PATH for locally installed tools
+        PATH = "${env.HOME}/.local/bin:${env.HOME}/maven/bin:${env.PATH}"
     }
 
     stages {
@@ -32,41 +35,60 @@ pipeline {
                 sh '''
                     echo "Installing required tools if missing..."
 
+                    # Create local bin directory
+                    mkdir -p $HOME/.local/bin
+                    export PATH=$HOME/.local/bin:$PATH
+
                     # Install Maven if not found
                     if ! command -v mvn &> /dev/null; then
-                        echo "Installing Maven..."
-                        sudo apt-get update
-                        sudo apt-get install -y maven
+                        echo "Installing Maven to user directory..."
+                        cd $HOME
+                        curl -O https://archive.apache.org/dist/maven/maven-3/3.9.5/binaries/apache-maven-3.9.5-bin.tar.gz
+                        tar -xzf apache-maven-3.9.5-bin.tar.gz
+                        mv apache-maven-3.9.5 maven
+                        rm apache-maven-3.9.5-bin.tar.gz
+                        export PATH=$HOME/maven/bin:$PATH
+                        echo "export PATH=$HOME/maven/bin:\$PATH" >> $HOME/.bashrc
+                        echo "Maven installed: $(mvn -version | head -n 1)"
                     else
                         echo "Maven already installed: $(mvn -version | head -n 1)"
                     fi
 
                     # Install AWS CLI if not found
                     if ! command -v aws &> /dev/null; then
-                        echo "Installing AWS CLI..."
+                        echo "Installing AWS CLI to user directory..."
+                        cd /tmp
                         curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
-                        unzip awscliv2.zip
-                        sudo ./aws/install
+                        unzip -q awscliv2.zip
+                        ./aws/install -i $HOME/.aws-cli -b $HOME/.local/bin
                         rm -rf aws awscliv2.zip
+                        export PATH=$HOME/.local/bin:$PATH
+                        echo "AWS CLI installed: $(aws --version)"
                     else
                         echo "AWS CLI already installed: $(aws --version)"
                     fi
 
                     # Install kubectl if not found
                     if ! command -v kubectl &> /dev/null; then
-                        echo "Installing kubectl..."
+                        echo "Installing kubectl to user directory..."
                         curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
-                        sudo install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
-                        rm kubectl
+                        chmod +x kubectl
+                        mv kubectl $HOME/.local/bin/kubectl
+                        export PATH=$HOME/.local/bin:$PATH
+                        echo "kubectl installed: $(kubectl version --client --short 2>/dev/null || echo 'version check failed')"
                     else
                         echo "kubectl already installed: $(kubectl version --client --short 2>/dev/null || echo 'version check failed')"
                     fi
 
-                    # Fix Docker permissions
+                    # Check Docker (must be pre-installed with proper permissions)
                     if command -v docker &> /dev/null; then
-                        echo "Configuring Docker permissions..."
-                        sudo usermod -aG docker jenkins 2>/dev/null || echo "Usermod failed (may need manual intervention)"
-                        echo "Docker: $(docker --version)"
+                        echo "Docker found: $(docker --version)"
+                        # Test docker access
+                        if docker info &> /dev/null; then
+                            echo "Docker access confirmed"
+                        else
+                            echo "WARNING: Jenkins user cannot access Docker. Please run: sudo usermod -aG docker jenkins && sudo systemctl restart jenkins"
+                        fi
                     else
                         echo "ERROR: Docker not found. Please install Docker manually."
                         exit 1
@@ -79,6 +101,9 @@ pipeline {
                     else
                         echo "Java: $(java -version 2>&1 | head -n 1)"
                     fi
+
+                    # Add local bin to PATH for subsequent stages
+                    echo "export PATH=$HOME/.local/bin:$HOME/maven/bin:\$PATH" > $WORKSPACE/env_vars
                 '''
             }
         }
@@ -252,8 +277,9 @@ pipeline {
 
             sh '''
             if command -v docker &> /dev/null; then
-                docker image prune -f || echo "Docker prune failed, continuing..."
-                docker system prune -f || echo "Docker system prune failed, continuing..."
+                # Try Docker cleanup but don't fail on permission errors
+                docker image prune -f 2>/dev/null || echo "Docker prune skipped (permission denied or no access)"
+                docker system prune -f 2>/dev/null || echo "Docker system prune skipped (permission denied or no access)"
             else
                 echo "Docker not available, skipping cleanup"
             fi
