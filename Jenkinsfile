@@ -27,6 +27,40 @@ pipeline {
             }
         }
 
+        stage('Clean Disk Space') {
+            steps {
+                sh '''
+                    echo "Cleaning up disk space before build..."
+                    
+                    # Clean Docker
+                    if command -v docker &> /dev/null; then
+                        docker system prune -af --volumes || echo "Docker prune failed, continuing..."
+                    fi
+                    
+                    # Clean Maven local repository old artifacts (keep last 30 days)
+                    if [ -d ~/.m2/repository ]; then
+                        find ~/.m2/repository -type f -mtime +30 -delete || echo "Maven cleanup failed, continuing..."
+                    fi
+                    
+                    # Clean old Jenkins workspaces (keep last 7 days)
+                    if [ -d /var/lib/jenkins/workspace ]; then
+                        find /var/lib/jenkins/workspace -type d -mtime +7 -exec rm -rf {} + 2>/dev/null || echo "Workspace cleanup failed, continuing..."
+                    fi
+                    
+                    # Clean old Jenkins builds
+                    if [ -d /var/lib/jenkins/jobs ]; then
+                        find /var/lib/jenkins/jobs -type d -name "builds" -mtime +7 -exec rm -rf {} + 2>/dev/null || echo "Builds cleanup failed, continuing..."
+                    fi
+                    
+                    # Clean temporary files
+                    rm -rf /tmp/* 2>/dev/null || echo "Temp cleanup failed, continuing..."
+                    
+                    # Check disk space
+                    df -h
+                '''
+            }
+        }
+
         stage('Check Required Tools') {
             steps {
                 sh '''
@@ -107,6 +141,11 @@ pipeline {
                 }
 
             }
+            post {
+                always {
+                    sh 'docker system prune -f || echo "Docker prune failed, continuing..."'
+                }
+            }
 
         }
 
@@ -124,6 +163,11 @@ pipeline {
 
                 }
 
+            }
+            post {
+                always {
+                    sh 'docker system prune -f || echo "Docker prune failed, continuing..."'
+                }
             }
 
         }
@@ -143,6 +187,11 @@ pipeline {
                 }
 
             }
+            post {
+                always {
+                    sh 'docker system prune -f || echo "Docker prune failed, continuing..."'
+                }
+            }
 
         }
 
@@ -160,6 +209,11 @@ pipeline {
 
                 }
 
+            }
+            post {
+                always {
+                    sh 'docker system prune -f || echo "Docker prune failed, continuing..."'
+                }
             }
 
         }
