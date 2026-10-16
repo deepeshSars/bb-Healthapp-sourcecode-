@@ -18,9 +18,9 @@
     <name>bbhealthapp-api</name>
 
     <properties>
-        <java.version>11</java.version>
-        <maven.compiler.source>11</maven.compiler.source>
-        <maven.compiler.target>11</maven.compiler.target>
+        <java.version>8</java.version>
+        <maven.compiler.source>1.8</maven.compiler.source>
+        <maven.compiler.target>1.8</maven.compiler.target>
         <lombok.version>1.18.30</lombok.version>
     </properties>
 
@@ -112,13 +112,14 @@
     <build>
         <plugins>
 
-            <!-- IMPORTANT: FIX LOMBOK + JAVA MODULE ERROR -->
+            <!-- IMPORTANT: FIX LOMBOK COMPATIBILITY -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
                 <version>3.11.0</version>
                 <configuration>
-                    <release>11</release>
+                    <source>1.8</source>
+                    <target>1.8</target>
                     <annotationProcessorPaths>
                         <path>
                             <groupId>org.projectlombok</groupId>
