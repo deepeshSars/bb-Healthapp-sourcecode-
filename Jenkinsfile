@@ -85,21 +85,7 @@ pipeline {
             }
         }
 
-        stage('Cleanup') {
-            steps {
-                echo "Cleaning up Docker images to free disk space..."
-                sh "docker rmi ${REGISTRY}/bbhealthapp-master-service:${IMAGE_TAG} || true"
-                sh "docker rmi ${REGISTRY}/bbhealthapp-master-service:latest || true"
-                sh "docker rmi ${REGISTRY}/bbhealthapp-register-service:${IMAGE_TAG} || true"
-                sh "docker rmi ${REGISTRY}/bbhealthapp-register-service:latest || true"
-                sh "docker rmi ${REGISTRY}/bbhealthapp-document-service:${IMAGE_TAG} || true"
-                sh "docker rmi ${REGISTRY}/bbhealthapp-document-service:latest || true"
-                sh "docker rmi ${REGISTRY}/bbhealthapp-frontend:${IMAGE_TAG} || true"
-                sh "docker rmi ${REGISTRY}/bbhealthapp-frontend:latest || true"
-                sh 'docker logout ${REGISTRY} || true'
-            }
-        }
-      
+
         stage('Deploy to Kubernetes') {
             steps {
                 echo "Deploying to Kubernetes cluster..."
