@@ -107,11 +107,12 @@ pipeline {
                 dir('k8s') {
                     // Update image references in deployment files
                     sh """
-                        sed -i 's|image: .*bbhealthapp-master-service.*|image: ${REGISTRY}/bbhealthapp-master-service:${IMAGE_TAG}|g' master-service-deployment.yaml
-                        sed -i 's|image: .*bbhealthapp-register-service.*|image: ${REGISTRY}/bbhealthapp-register-service:${IMAGE_TAG}|g' register-service-deployment.yaml
-                        sed -i 's|image: .*bbhealthapp-document-service.*|image: ${REGISTRY}/bbhealthapp-document-service:${IMAGE_TAG}|g' document-service-deployment.yaml
-                        sed -i 's|image: .*bbhealthapp-frontend.*|image: ${REGISTRY}/bbhealthapp-frontend:${IMAGE_TAG}|g' frontend-deployment.yaml
-                        sed -i 's|imagePullPolicy: Never|imagePullPolicy: IfNotPresent|g' *.yaml
+                        sed -i.bak 's|image: .*bbhealthapp-master-service.*|image: ${REGISTRY}/bbhealthapp-master-service:${IMAGE_TAG}|g' master-service-deployment.yaml
+                        sed -i.bak 's|image: .*bbhealthapp-register-service.*|image: ${REGISTRY}/bbhealthapp-register-service:${IMAGE_TAG}|g' register-service-deployment.yaml
+                        sed -i.bak 's|image: .*bbhealthapp-document-service.*|image: ${REGISTRY}/bbhealthapp-document-service:${IMAGE_TAG}|g' document-service-deployment.yaml
+                        sed -i.bak 's|image: .*bbhealthapp-frontend.*|image: ${REGISTRY}/bbhealthapp-frontend:${IMAGE_TAG}|g' frontend-deployment.yaml
+                        sed -i.bak 's|imagePullPolicy: Never|imagePullPolicy: IfNotPresent|g' *.yaml
+                        rm -f *.bak
                     """
 
                     // Apply base configurations and persistent storage
