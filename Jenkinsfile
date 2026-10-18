@@ -236,7 +236,7 @@ pipeline {
             script {
                 sh """
                     # Clean workspace
-                    rm -rf healthapp-aws
+                    rm -rf bb-Healthapp-sourcecode-
                 """
                 echo "Pipeline execution completed"
             }
