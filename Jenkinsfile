@@ -32,9 +32,7 @@ pipeline {
         stage('Checkout') {
             steps {
                 sh '''
-                    rm -rf healthapp-aws
                     git clone https://github.com/deepeshSars/bb-Healthapp-sourcecode-.git
-                    cd healthapp-aws
                     git checkout main
                     git log -1
                 '''
@@ -55,7 +53,7 @@ pipeline {
                 expression { params.REBUILD_INFRA == true }
             }
             steps {
-                dir('healthapp-aws/terraform') {
+                dir('bb-Healthapp-sourcecode-/terraform') {
                     sh """
                         terraform init -input=false
                         terraform plan -out=tfplan
@@ -69,7 +67,7 @@ pipeline {
             parallel {
                 stage('Build Frontend') {
                     steps {
-                        dir('healthapp-aws/bbhealthapp-frontend') {
+                        dir('bb-Healthapp-sourcecode-/bbhealthapp-frontend') {
                             sh """
                                 docker build -t ${ECR_REGISTRY}/${FRONTEND_IMAGE}:${BUILD_NUMBER} .
                                 docker tag ${ECR_REGISTRY}/${FRONTEND_IMAGE}:${BUILD_NUMBER} ${ECR_REGISTRY}/${FRONTEND_IMAGE}:latest
@@ -79,7 +77,7 @@ pipeline {
                 }
                 stage('Build Master Service') {
                     steps {
-                        dir('healthapp-aws/bbhealthapp-backend/bbhealthapp-api-master') {
+                        dir('bb-Healthapp-sourcecode-/bbhealthapp-backend/bbhealthapp-api-master') {
                             sh """
                                 docker build -t ${ECR_REGISTRY}/${MASTER_IMAGE}:${BUILD_NUMBER} .
                                 docker tag ${ECR_REGISTRY}/${MASTER_IMAGE}:${BUILD_NUMBER} ${ECR_REGISTRY}/${MASTER_IMAGE}:latest
@@ -89,7 +87,7 @@ pipeline {
                 }
                 stage('Build Register Service') {
                     steps {
-                        dir('healthapp-aws/bbhealthapp-backend/bbhealthapp-api-register') {
+                        dir('bb-Healthapp-sourcecode-/bbhealthapp-backend/bbhealthapp-api-register') {
                             sh """
                                 docker build -t ${ECR_REGISTRY}/${REGISTER_IMAGE}:${BUILD_NUMBER} .
                                 docker tag ${ECR_REGISTRY}/${REGISTER_IMAGE}:${BUILD_NUMBER} ${ECR_REGISTRY}/${REGISTER_IMAGE}:latest
@@ -99,7 +97,7 @@ pipeline {
                 }
                 stage('Build Document Service') {
                     steps {
-                        dir('healthapp-aws/bbhealthapp-backend/bbhealthapp-api-document') {
+                        dir('bb-Healthapp-sourcecode-/bbhealthapp-backend/bbhealthapp-api-document') {
                             sh """
                                 docker build -t ${ECR_REGISTRY}/${DOCUMENT_IMAGE}:${BUILD_NUMBER} .
                                 docker tag ${ECR_REGISTRY}/${DOCUMENT_IMAGE}:${BUILD_NUMBER} ${ECR_REGISTRY}/${DOCUMENT_IMAGE}:latest
@@ -115,7 +113,7 @@ pipeline {
                 expression { params.RUN_TESTS == true }
             }
             steps {
-                dir('healthapp-aws') {
+                dir('bb-Healthapp-sourcecode-') {
                     sh """
                         # Run basic Docker image validation
                         docker images | grep bbhealthapp
@@ -150,7 +148,7 @@ pipeline {
                 expression { params.SKIP_DEPLOY == false }
             }
             steps {
-                dir('healthapp-aws') {
+                dir('bb-Healthapp-sourcecode-') {
                     sh """
                         aws eks update-kubeconfig --name ${CLUSTER_NAME} --region ${AWS_REGION}
 
