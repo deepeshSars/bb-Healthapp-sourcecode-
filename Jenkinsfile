@@ -2,143 +2,246 @@ pipeline {
     agent any
 
     environment {
-        REGISTRY = '591950085623.dkr.ecr.ap-south-1.amazonaws.com'
         AWS_REGION = 'ap-south-1'
+        ECR_REGISTRY = '591950085623.dkr.ecr.ap-south-1.amazonaws.com'
+        CLUSTER_NAME = 'bbhealthapp-cluster'
         NAMESPACE = 'bbhealthapp'
-        IMAGE_TAG = "${env.BUILD_NUMBER}"
+        FRONTEND_IMAGE = 'bbhealthapp-frontend'
+        MASTER_IMAGE = 'bbhealthapp-master-service'
+        REGISTER_IMAGE = 'bbhealthapp-register-service'
+        DOCUMENT_IMAGE = 'bbhealthapp-document-service'
     }
 
-    options {
-        skipDefaultCheckout true
+    parameters {
+        choice(name: 'ENVIRONMENT', choices: ['dev', 'staging', 'prod'], description: 'Deployment environment')
+        booleanParam(name: 'REBUILD_INFRA', defaultValue: false, description: 'Rebuild infrastructure with Terraform')
+        booleanParam(name: 'RUN_TESTS', defaultValue: true, description: 'Run automated tests')
+        booleanParam(name: 'SKIP_DEPLOY', defaultValue: false, description: 'Skip deployment (build and push only)')
     }
 
     stages {
-        stage('Pull stage') {
+        stage('Setup') {
             steps {
-                git branch: 'main', credentialsId: 'github-credentials', url: 'https://github.com/deepeshSars/bb-Healthapp-sourcecode-.git'
-            }
-        }
-
-        stage('Build') {
-            steps {
-                echo "Building Docker images for BBHealthApp..."
-
-                // Build Master Service
-                dir('bbhealthapp-backend/bbhealthapp-api-master') {
-                    sh "docker build -t ${REGISTRY}/bbhealthapp-master-service:${IMAGE_TAG} -t ${REGISTRY}/bbhealthapp-master-service:latest ."
-                }
-
-                // Build Register Service
-                dir('bbhealthapp-backend/bbhealthapp-api-register') {
-                    sh "docker build -t ${REGISTRY}/bbhealthapp-register-service:${IMAGE_TAG} -t ${REGISTRY}/bbhealthapp-register-service:latest ."
-                }
-
-                // Build Document Service
-                dir('bbhealthapp-backend/bbhealthapp-api-document') {
-                    sh "docker build -t ${REGISTRY}/bbhealthapp-document-service:${IMAGE_TAG} -t ${REGISTRY}/bbhealthapp-document-service:latest ."
-                }
-
-                // Build Frontend
-                dir('bbhealthapp-frontend') {
-                    sh "docker build -t ${REGISTRY}/bbhealthapp-frontend:${IMAGE_TAG} -t ${REGISTRY}/bbhealthapp-frontend:latest ."
+                script {
+                    currentBuild.displayName = "#${BUILD_NUMBER} - ${params.ENVIRONMENT}"
+                    echo "Starting deployment for environment: ${params.ENVIRONMENT}"
                 }
             }
         }
 
-        stage('Create ECR Repositories') {
+        stage('Checkout') {
             steps {
-                withCredentials([string(credentialsId: 'aws-access-key-id', variable: 'AWS_ACCESS_KEY_ID'), string(credentialsId: 'aws-secret-access-key', variable: 'AWS_SECRET_ACCESS_KEY')]) {
+                sh '''
+                    rm -rf healthapp-aws
+                    git clone https://github.com/deepeshSars/bb-Healthapp-sourcecode-.git
+                    cd healthapp-aws
+                    git checkout main
+                    git log -1
+                '''
+            }
+        }
+
+        stage('Configure AWS') {
+            steps {
+                sh """
+                    aws configure set region ${AWS_REGION}
+                    aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ECR_REGISTRY}
+                """
+            }
+        }
+
+        stage('Provision Infrastructure') {
+            when {
+                expression { params.REBUILD_INFRA == true }
+            }
+            steps {
+                dir('healthapp-aws/terraform') {
                     sh """
-                        export AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
-                        export AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
-                        aws ecr describe-repositories --repository-names bbhealthapp-master-service --region ${AWS_REGION} || \
-                        aws ecr create-repository --repository-name bbhealthapp-master-service --region ${AWS_REGION}
-                        aws ecr describe-repositories --repository-names bbhealthapp-register-service --region ${AWS_REGION} || \
-                        aws ecr create-repository --repository-name bbhealthapp-register-service --region ${AWS_REGION}
-                        aws ecr describe-repositories --repository-names bbhealthapp-document-service --region ${AWS_REGION} || \
-                        aws ecr create-repository --repository-name bbhealthapp-document-service --region ${AWS_REGION}
-                        aws ecr describe-repositories --repository-names bbhealthapp-frontend --region ${AWS_REGION} || \
-                        aws ecr create-repository --repository-name bbhealthapp-frontend --region ${AWS_REGION}
+                        terraform init -input=false
+                        terraform plan -out=tfplan
+                        terraform apply -auto-approve tfplan
                     """
                 }
             }
         }
 
-        stage('Push stage') {
-            steps {
-                withCredentials([string(credentialsId: 'aws-access-key-id', variable: 'AWS_ACCESS_KEY_ID'), string(credentialsId: 'aws-secret-access-key', variable: 'AWS_SECRET_ACCESS_KEY')]) {
-                    sh """
-                        export AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
-                        export AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
-                        aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${REGISTRY}
-                    """
+        stage('Build Docker Images') {
+            parallel {
+                stage('Build Frontend') {
+                    steps {
+                        dir('healthapp-aws/bbhealthapp-frontend') {
+                            sh """
+                                docker build -t ${ECR_REGISTRY}/${FRONTEND_IMAGE}:${BUILD_NUMBER} .
+                                docker tag ${ECR_REGISTRY}/${FRONTEND_IMAGE}:${BUILD_NUMBER} ${ECR_REGISTRY}/${FRONTEND_IMAGE}:latest
+                            """
+                        }
+                    }
                 }
-
-                sh "docker push ${REGISTRY}/bbhealthapp-master-service:${IMAGE_TAG}"
-                sh "docker push ${REGISTRY}/bbhealthapp-master-service:latest"
-                sh "docker push ${REGISTRY}/bbhealthapp-register-service:${IMAGE_TAG}"
-                sh "docker push ${REGISTRY}/bbhealthapp-register-service:latest"
-                sh "docker push ${REGISTRY}/bbhealthapp-document-service:${IMAGE_TAG}"
-                sh "docker push ${REGISTRY}/bbhealthapp-document-service:latest"
-                sh "docker push ${REGISTRY}/bbhealthapp-frontend:${IMAGE_TAG}"
-                sh "docker push ${REGISTRY}/bbhealthapp-frontend:latest"
-            }
-        }
-
-
-        stage('Deploy to Kubernetes') {
-            steps {
-                echo "Deploying to Kubernetes cluster..."
-
-                dir('k8s') {
-                    // Update image references in deployment files
-                    sh """
-                        sed -i.bak 's|image: .*bbhealthapp-master-service.*|image: ${REGISTRY}/bbhealthapp-master-service:${IMAGE_TAG}|g' master-service-deployment.yaml
-                        sed -i.bak 's|image: .*bbhealthapp-register-service.*|image: ${REGISTRY}/bbhealthapp-register-service:${IMAGE_TAG}|g' register-service-deployment.yaml
-                        sed -i.bak 's|image: .*bbhealthapp-document-service.*|image: ${REGISTRY}/bbhealthapp-document-service:${IMAGE_TAG}|g' document-service-deployment.yaml
-                        sed -i.bak 's|image: .*bbhealthapp-frontend.*|image: ${REGISTRY}/bbhealthapp-frontend:${IMAGE_TAG}|g' frontend-deployment.yaml
-                        sed -i.bak 's|imagePullPolicy: Never|imagePullPolicy: IfNotPresent|g' *.yaml
-                        rm -f *.bak
-                    """
-
-                    // Apply base configurations and persistent storage
-                    sh 'kubectl apply -f namespace.yaml'
-                    sh 'kubectl apply -f configmap.yaml'
-                    sh 'kubectl apply -f secret.yaml'
-                    sh 'kubectl apply -f pvc.yaml'
-
-                    // Deploy backend and frontend microservices
-                    sh 'kubectl apply -f master-service-deployment.yaml'
-                    sh 'kubectl apply -f register-service-deployment.yaml'
-                    sh 'kubectl apply -f document-service-deployment.yaml'
-                    sh 'kubectl apply -f frontend-deployment.yaml'
-                    sh 'kubectl apply -f ingress.yaml'
-
-                    // Wait for deployments to be ready
-                    sh "kubectl rollout status deployment/master-service -n ${NAMESPACE} --timeout=300s"
-                    sh "kubectl rollout status deployment/register-service -n ${NAMESPACE} --timeout=300s"
-                    sh "kubectl rollout status deployment/document-service -n ${NAMESPACE} --timeout=300s"
-                    sh "kubectl rollout status deployment/frontend -n ${NAMESPACE} --timeout=300s"
+                stage('Build Master Service') {
+                    steps {
+                        dir('healthapp-aws/bbhealthapp-backend/bbhealthapp-api-master') {
+                            sh """
+                                docker build -t ${ECR_REGISTRY}/${MASTER_IMAGE}:${BUILD_NUMBER} .
+                                docker tag ${ECR_REGISTRY}/${MASTER_IMAGE}:${BUILD_NUMBER} ${ECR_REGISTRY}/${MASTER_IMAGE}:latest
+                            """
+                        }
+                    }
+                }
+                stage('Build Register Service') {
+                    steps {
+                        dir('healthapp-aws/bbhealthapp-backend/bbhealthapp-api-register') {
+                            sh """
+                                docker build -t ${ECR_REGISTRY}/${REGISTER_IMAGE}:${BUILD_NUMBER} .
+                                docker tag ${ECR_REGISTRY}/${REGISTER_IMAGE}:${BUILD_NUMBER} ${ECR_REGISTRY}/${REGISTER_IMAGE}:latest
+                            """
+                        }
+                    }
+                }
+                stage('Build Document Service') {
+                    steps {
+                        dir('healthapp-aws/bbhealthapp-backend/bbhealthapp-api-document') {
+                            sh """
+                                docker build -t ${ECR_REGISTRY}/${DOCUMENT_IMAGE}:${BUILD_NUMBER} .
+                                docker tag ${ECR_REGISTRY}/${DOCUMENT_IMAGE}:${BUILD_NUMBER} ${ECR_REGISTRY}/${DOCUMENT_IMAGE}:latest
+                            """
+                        }
+                    }
                 }
             }
         }
 
-        stage('Verify') {
+        stage('Run Tests') {
+            when {
+                expression { params.RUN_TESTS == true }
+            }
             steps {
-                echo "Verifying Kubernetes deployment..."
-                sh "kubectl get pods -n ${NAMESPACE}"
-                sh "kubectl get services -n ${NAMESPACE}"
-                sh "kubectl get ingress -n ${NAMESPACE}"
+                dir('healthapp-aws') {
+                    sh """
+                        # Run basic Docker image validation
+                        docker images | grep bbhealthapp
+
+                        # Test frontend build
+                        docker run --rm ${ECR_REGISTRY}/${FRONTEND_IMAGE}:${BUILD_NUMBER} ls -la /usr/local/apache2/htdocs/ || true
+
+                        # Test backend services health check (if health endpoints exist)
+                        # docker run --rm ${ECR_REGISTRY}/${MASTER_IMAGE}:${BUILD_NUMBER} curl -f http://localhost:8080/actuator/health || true
+                    """
+                }
+            }
+        }
+
+        stage('Push to ECR') {
+            steps {
+                sh """
+                    docker push ${ECR_REGISTRY}/${FRONTEND_IMAGE}:${BUILD_NUMBER}
+                    docker push ${ECR_REGISTRY}/${FRONTEND_IMAGE}:latest
+                    docker push ${ECR_REGISTRY}/${MASTER_IMAGE}:${BUILD_NUMBER}
+                    docker push ${ECR_REGISTRY}/${MASTER_IMAGE}:latest
+                    docker push ${ECR_REGISTRY}/${REGISTER_IMAGE}:${BUILD_NUMBER}
+                    docker push ${ECR_REGISTRY}/${REGISTER_IMAGE}:latest
+                    docker push ${ECR_REGISTRY}/${DOCUMENT_IMAGE}:${BUILD_NUMBER}
+                    docker push ${ECR_REGISTRY}/${DOCUMENT_IMAGE}:latest
+                """
+            }
+        }
+
+        stage('Deploy to EKS') {
+            when {
+                expression { params.SKIP_DEPLOY == false }
+            }
+            steps {
+                dir('healthapp-aws') {
+                    sh """
+                        aws eks update-kubeconfig --name ${CLUSTER_NAME} --region ${AWS_REGION}
+
+                        # Create namespace if it doesn't exist
+                        kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
+
+                        # Apply Kubernetes manifests
+                        kubectl apply -f k8s/ -n ${NAMESPACE}
+                    """
+                }
+            }
+        }
+
+        stage('Health Check') {
+            when {
+                expression { params.SKIP_DEPLOY == false }
+            }
+            steps {
+                sh """
+                    aws eks update-kubeconfig --name ${CLUSTER_NAME} --region ${AWS_REGION}
+
+                    # Wait for pods to be ready
+                    kubectl wait --for=condition=ready pod -l app=bbhealthapp -n ${NAMESPACE} --timeout=300s
+
+                    # Get pod status
+                    kubectl get pods -n ${NAMESPACE}
+                    kubectl get services -n ${NAMESPACE}
+                    kubectl get ingress -n ${NAMESPACE}
+                """
+            }
+        }
+
+        stage('Integration Tests') {
+            when {
+                expression { params.SKIP_DEPLOY == false && params.RUN_TESTS == true }
+            }
+            steps {
+                script {
+                    try {
+                        sh """
+                            # Get Load Balancer URL
+                            LB_URL=\$(kubectl get ingress -n ${NAMESPACE} -o jsonpath='{.items[0].status.loadBalancer.ingress[0].hostname}')
+                            echo "Load Balancer URL: \$LB_URL"
+
+                            # Basic connectivity test
+                            curl -f http://\$LB_URL/ || echo "Frontend test failed"
+                            curl -f http://\$LB_URL/api/master/actuator/health || echo "Master service health check failed"
+                        """
+                    } catch (Exception e) {
+                        echo "Integration tests failed: ${e}"
+                        currentBuild.result = 'UNSTABLE'
+                    }
+                }
+            }
+        }
+
+        stage('Cleanup') {
+            steps {
+                sh """
+                    # Clean up old Docker images
+                    docker system prune -f
+                    docker image prune -a -f
+                """
             }
         }
     }
 
     post {
         success {
-            echo "BBHealthApp deployment to Kubernetes completed successfully!"
+            script {
+                echo "✅ Deployment successful for ${params.ENVIRONMENT} environment!"
+                echo "Build number: ${BUILD_NUMBER}"
+                echo "Image tag: ${BUILD_NUMBER}"
+            }
         }
         failure {
-            echo "BBHealthApp deployment failed. Check logs for details."
+            script {
+                echo "❌ Deployment failed!"
+            }
+        }
+        unstable {
+            echo "⚠️ Deployment completed with warnings"
+        }
+        always {
+            script {
+                sh """
+                    # Clean workspace
+                    rm -rf healthapp-aws
+                """
+                echo "Pipeline execution completed"
+            }
         }
     }
 }

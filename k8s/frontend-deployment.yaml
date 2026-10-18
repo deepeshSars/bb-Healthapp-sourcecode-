@@ -25,7 +25,6 @@ spec:
         - name: bbhealthapp-ecr-secret
       containers:
         - name: frontend
-          image: 591950085623.dkr.ecr.ap-south-1.amazonaws.com/bbhealthapp-frontend:latest
           imagePullPolicy: Always
           ports:
             - containerPort: 80
