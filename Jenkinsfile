@@ -32,10 +32,11 @@ pipeline {
         stage('Configure AWS') {
             steps {
                 withCredentials([usernamePassword(credentialsId: 'aws_ecr_creds', usernameVariable: 'AWS_ACCESS_KEY_ID', passwordVariable: 'AWS_SECRET_ACCESS_KEY')]) {
-                    sh """
-                        aws configure set region ${AWS_REGION}
-                        aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ECR_REGISTRY}
-                    """
+                    withEnv(["AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}", "AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}", "AWS_DEFAULT_REGION=${AWS_REGION}"]) {
+                        sh """
+                            aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ECR_REGISTRY}
+                        """
+                    }
                 }
             }
         }
@@ -46,12 +47,14 @@ pipeline {
             }
             steps {
                 withCredentials([usernamePassword(credentialsId: 'aws_ecr_creds', usernameVariable: 'AWS_ACCESS_KEY_ID', passwordVariable: 'AWS_SECRET_ACCESS_KEY')]) {
-                    dir('terraform') {
-                        sh """
-                            terraform init -input=false
-                            terraform plan -out=tfplan
-                            terraform apply -auto-approve tfplan
-                        """
+                    withEnv(["AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}", "AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}", "AWS_DEFAULT_REGION=${AWS_REGION}"]) {
+                        dir('terraform') {
+                            sh """
+                                terraform init -input=false
+                                terraform plan -out=tfplan
+                                terraform apply -auto-approve tfplan
+                            """
+                        }
                     }
                 }
             }
@@ -141,15 +144,17 @@ pipeline {
             }
             steps {
                 withCredentials([usernamePassword(credentialsId: 'aws_ecr_creds', usernameVariable: 'AWS_ACCESS_KEY_ID', passwordVariable: 'AWS_SECRET_ACCESS_KEY')]) {
-                    sh """
-                        aws eks update-kubeconfig --name ${CLUSTER_NAME} --region ${AWS_REGION}
+                    withEnv(["AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}", "AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}", "AWS_DEFAULT_REGION=${AWS_REGION}"]) {
+                        sh """
+                            aws eks update-kubeconfig --name ${CLUSTER_NAME} --region ${AWS_REGION}
 
-                        # Create namespace if it doesn't exist
-                        kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
+                            # Create namespace if it doesn't exist
+                            kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
 
-                        # Apply Kubernetes manifests
-                        kubectl apply -f k8s/ -n ${NAMESPACE}
-                    """
+                            # Apply Kubernetes manifests
+                            kubectl apply -f k8s/ -n ${NAMESPACE}
+                        """
+                    }
                 }
             }
         }
@@ -160,17 +165,19 @@ pipeline {
             }
             steps {
                 withCredentials([usernamePassword(credentialsId: 'aws_ecr_creds', usernameVariable: 'AWS_ACCESS_KEY_ID', passwordVariable: 'AWS_SECRET_ACCESS_KEY')]) {
-                    sh """
-                        aws eks update-kubeconfig --name ${CLUSTER_NAME} --region ${AWS_REGION}
+                    withEnv(["AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}", "AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}", "AWS_DEFAULT_REGION=${AWS_REGION}"]) {
+                        sh """
+                            aws eks update-kubeconfig --name ${CLUSTER_NAME} --region ${AWS_REGION}
 
-                        # Wait for pods to be ready
-                        kubectl wait --for=condition=ready pod -l app=bbhealthapp -n ${NAMESPACE} --timeout=300s
+                            # Wait for pods to be ready
+                            kubectl wait --for=condition=ready pod -l app=bbhealthapp -n ${NAMESPACE} --timeout=300s
 
-                        # Get pod status
-                        kubectl get pods -n ${NAMESPACE}
-                        kubectl get services -n ${NAMESPACE}
-                        kubectl get ingress -n ${NAMESPACE}
-                    """
+                            # Get pod status
+                            kubectl get pods -n ${NAMESPACE}
+                            kubectl get services -n ${NAMESPACE}
+                            kubectl get ingress -n ${NAMESPACE}
+                        """
+                    }
                 }
             }
         }
