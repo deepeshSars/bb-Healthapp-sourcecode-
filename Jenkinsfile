@@ -4,12 +4,12 @@ pipeline {
     environment {
         AWS_REGION = 'ap-south-1'
         ECR_REGISTRY = '591950085623.dkr.ecr.ap-south-1.amazonaws.com'
-        CLUSTER_NAME = 'bbhealthapp-cluster'
+        CLUSTER_NAME = 'bbhealthapp-dev-eks'
         NAMESPACE = 'bbhealthapp'
-        FRONTEND_IMAGE = 'bbhealthapp-frontend'
-        MASTER_IMAGE = 'bbhealthapp-master-service'
-        REGISTER_IMAGE = 'bbhealthapp-register-service'
-        DOCUMENT_IMAGE = 'bbhealthapp-document-service'
+        FRONTEND_IMAGE = 'bbhealthapp-dev-frontend'
+        MASTER_IMAGE = 'bbhealthapp-dev-master-service'
+        REGISTER_IMAGE = 'bbhealthapp-dev-register-service'
+        DOCUMENT_IMAGE = 'bbhealthapp-dev-document-service'
     }
 
     parameters {
@@ -41,6 +41,12 @@ pipeline {
                 withCredentials([aws(credentialsId: 'aws-credentials')]) {
                     sh """
                         aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ECR_REGISTRY}
+
+                        # Create ECR repositories if they don't exist
+                        aws ecr describe-repositories --repository-names ${FRONTEND_IMAGE} --region ${AWS_REGION} || aws ecr create-repository --repository-name ${FRONTEND_IMAGE} --region ${AWS_REGION}
+                        aws ecr describe-repositories --repository-names ${MASTER_IMAGE} --region ${AWS_REGION} || aws ecr create-repository --repository-name ${MASTER_IMAGE} --region ${AWS_REGION}
+                        aws ecr describe-repositories --repository-names ${REGISTER_IMAGE} --region ${AWS_REGION} || aws ecr create-repository --repository-name ${REGISTER_IMAGE} --region ${AWS_REGION}
+                        aws ecr describe-repositories --repository-names ${DOCUMENT_IMAGE} --region ${AWS_REGION} || aws ecr create-repository --repository-name ${DOCUMENT_IMAGE} --region ${AWS_REGION}
                     """
                 }
             }
@@ -229,10 +235,14 @@ pipeline {
             script {
                 echo "❌ Deployment failed!"
                 echo "Attempting rollback..."
-                withCredentials([aws(credentialsId: 'aws-credentials')]) {
-                    sh """
-                        aws eks update-kubeconfig --name ${CLUSTER_NAME} --region ${AWS_REGION}
-                    """
+                try {
+                    withCredentials([aws(credentialsId: 'aws-credentials')]) {
+                        sh """
+                            aws eks update-kubeconfig --name ${CLUSTER_NAME} --region ${AWS_REGION} || echo "Cluster not found, skipping rollback"
+                        """
+                    }
+                } catch (Exception e) {
+                    echo "Rollback failed or not needed: ${e}"
                 }
             }
         }
