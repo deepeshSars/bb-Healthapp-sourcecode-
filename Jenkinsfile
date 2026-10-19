@@ -157,8 +157,7 @@ pipeline {
                         aws eks update-kubeconfig --name ${CLUSTER_NAME} --region ${AWS_REGION}
 
                         # Create namespace if it doesn't exist
-                        kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml > /tmp/namespace.yaml || true
-                        kubectl apply -f /tmp/namespace.yaml || true
+                        kubectl create namespace ${NAMESPACE} || true
                         # Apply Kubernetes manifests
                         kubectl apply -f k8s/ -n ${NAMESPACE}
                     """
@@ -198,8 +197,7 @@ pipeline {
                     try {
                         sh """
                             # Get Load Balancer URL
-                            kubectl get ingress -n ${NAMESPACE} -o jsonpath > /tmp/ingress.json || true
-                            LB_URL=\$(cat /tmp/ingress.json | jq -r '.items[0].status.loadBalancer.ingress[0].hostname' 2>/dev/null || echo "")
+                            LB_URL=\$(kubectl get ingress -n ${NAMESPACE} -o jsonpath='{.items[0].status.loadBalancer.ingress[0].hostname}' 2>/dev/null || echo "")
                             echo "Load Balancer URL: \$LB_URL"
 
                             # Basic connectivity test
