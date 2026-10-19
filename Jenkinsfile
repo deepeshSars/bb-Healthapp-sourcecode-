@@ -52,6 +52,20 @@ pipeline {
             }
         }
 
+        stage('Install kubectl') {
+            steps {
+                sh '''
+                    # Remove broken kubectl if exists
+                    sudo rm -f /usr/local/bin/kubectl || true
+                    # Install kubectl
+                    curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+                    sudo chmod +x kubectl
+                    sudo mv kubectl /usr/local/bin/
+                    kubectl version --client
+                '''
+            }
+        }
+
         stage('Provision Infrastructure') {
             when {
                 expression { params.REBUILD_INFRA == true }
