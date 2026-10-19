@@ -169,7 +169,14 @@ pipeline {
                 withCredentials([aws(credentialsId: 'aws-credentials')]) {
                     sh 'aws eks update-kubeconfig --name ${CLUSTER_NAME} --region ${AWS_REGION}'
                     sh '${WORKSPACE}/bin/kubectl create namespace ${NAMESPACE} || true'
-                    sh '${WORKSPACE}/bin/kubectl apply -f k8s/ -n ${NAMESPACE}'
+                    sh '${WORKSPACE}/bin/kubectl apply -f k8s/configmap.yaml -n ${NAMESPACE}'
+                    sh '${WORKSPACE}/bin/kubectl apply -f k8s/secret.yaml -n ${NAMESPACE}'
+                    sh '${WORKSPACE}/bin/kubectl apply -f k8s/pvc.yaml -n ${NAMESPACE}'
+                    sh '${WORKSPACE}/bin/kubectl apply -f k8s/frontend-deployment.yaml -n ${NAMESPACE}'
+                    sh '${WORKSPACE}/bin/kubectl apply -f k8s/master-service-deployment.yaml -n ${NAMESPACE}'
+                    sh '${WORKSPACE}/bin/kubectl apply -f k8s/register-service-deployment.yaml -n ${NAMESPACE}'
+                    sh '${WORKSPACE}/bin/kubectl apply -f k8s/document-service-deployment.yaml -n ${NAMESPACE}'
+                    sh '${WORKSPACE}/bin/kubectl apply -f k8s/ingress.yaml -n ${NAMESPACE}'
                 }
             }
         }
