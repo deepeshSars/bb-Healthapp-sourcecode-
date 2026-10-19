@@ -55,13 +55,13 @@ pipeline {
         stage('Install kubectl') {
             steps {
                 sh '''
-                    # Remove broken kubectl if exists
-                    sudo rm -f /usr/local/bin/kubectl || true
-                    # Install kubectl
+                    # Install kubectl in workspace directory
+                    mkdir -p ${WORKSPACE}/bin
                     curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
-                    sudo chmod +x kubectl
-                    sudo mv kubectl /usr/local/bin/
-                    kubectl version --client
+                    chmod +x kubectl
+                    mv kubectl ${WORKSPACE}/bin/
+                    export PATH=${WORKSPACE}/bin:${PATH}
+                    ${WORKSPACE}/bin/kubectl version --client
                 '''
             }
         }
@@ -168,8 +168,8 @@ pipeline {
             steps {
                 withCredentials([aws(credentialsId: 'aws-credentials')]) {
                     sh 'aws eks update-kubeconfig --name ${CLUSTER_NAME} --region ${AWS_REGION}'
-                    sh 'kubectl create namespace ${NAMESPACE} || true'
-                    sh 'kubectl apply -f k8s/ -n ${NAMESPACE}'
+                    sh '${WORKSPACE}/bin/kubectl create namespace ${NAMESPACE} || true'
+                    sh '${WORKSPACE}/bin/kubectl apply -f k8s/ -n ${NAMESPACE}'
                 }
             }
         }
@@ -181,10 +181,10 @@ pipeline {
             steps {
                 withCredentials([aws(credentialsId: 'aws-credentials')]) {
                     sh 'aws eks update-kubeconfig --name ${CLUSTER_NAME} --region ${AWS_REGION}'
-                    sh 'kubectl wait --for=condition=ready pod --all -n ${NAMESPACE} --timeout=300s || true'
-                    sh 'kubectl get pods -n ${NAMESPACE}'
-                    sh 'kubectl get services -n ${NAMESPACE}'
-                    sh 'kubectl get ingress -n ${NAMESPACE}'
+                    sh '${WORKSPACE}/bin/kubectl wait --for=condition=ready pod --all -n ${NAMESPACE} --timeout=300s || true'
+                    sh '${WORKSPACE}/bin/kubectl get pods -n ${NAMESPACE}'
+                    sh '${WORKSPACE}/bin/kubectl get services -n ${NAMESPACE}'
+                    sh '${WORKSPACE}/bin/kubectl get ingress -n ${NAMESPACE}'
                 }
             }
         }
@@ -196,12 +196,12 @@ pipeline {
             steps {
                 script {
                     try {
-                        sh 'LB_URL=$(kubectl get ingress -n ${NAMESPACE} -o jsonpath=\'{.items[0].status.loadBalancer.ingress[0].hostname}\' 2>/dev/null || echo "")'
-                        sh 'echo "Load Balancer URL: $LB_URL"'
                         sh """
-                            if [ -n "$LB_URL" ]; then
-                                curl -f http://$LB_URL/ || echo "Frontend test failed"
-                                curl -f http://$LB_URL/api/master/actuator/health || echo "Master service health check failed"
+                            LB_URL=\$(${WORKSPACE}/bin/kubectl get ingress -n ${NAMESPACE} -o jsonpath='{.items[0].status.loadBalancer.ingress[0].hostname}' 2>/dev/null || echo "")
+                            echo "Load Balancer URL: \$LB_URL"
+                            if [ -n "\$LB_URL" ]; then
+                                curl -f http://\$LB_URL/ || echo "Frontend test failed"
+                                curl -f http://\$LB_URL/api/master/actuator/health || echo "Master service health check failed"
                             else
                                 echo "No Load Balancer URL found, skipping integration tests"
                             fi
@@ -241,6 +241,7 @@ pipeline {
                     withCredentials([aws(credentialsId: 'aws-credentials')]) {
                         sh """
                             aws eks update-kubeconfig --name ${CLUSTER_NAME} --region ${AWS_REGION} || echo "Cluster not found, skipping rollback"
+                            ${WORKSPACE}/bin/kubectl get pods -n ${NAMESPACE} || true
                         """
                     }
                 } catch (Exception e) {
