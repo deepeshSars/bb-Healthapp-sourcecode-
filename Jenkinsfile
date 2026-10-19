@@ -153,14 +153,9 @@ pipeline {
             }
             steps {
                 withCredentials([aws(credentialsId: 'aws-credentials')]) {
-                    sh """
-                        aws eks update-kubeconfig --name ${CLUSTER_NAME} --region ${AWS_REGION}
-
-                        # Create namespace if it doesn't exist
-                        kubectl create namespace ${NAMESPACE} || true
-                        # Apply Kubernetes manifests
-                        kubectl apply -f k8s/ -n ${NAMESPACE}
-                    """
+                    sh 'aws eks update-kubeconfig --name ${CLUSTER_NAME} --region ${AWS_REGION}'
+                    sh 'kubectl create namespace ${NAMESPACE} || true'
+                    sh 'kubectl apply -f k8s/ -n ${NAMESPACE}'
                 }
             }
         }
@@ -171,19 +166,11 @@ pipeline {
             }
             steps {
                 withCredentials([aws(credentialsId: 'aws-credentials')]) {
-                    sh """
-                        aws eks update-kubeconfig --name ${CLUSTER_NAME} --region ${AWS_REGION}
-
-                        # Wait for pods to be ready
-                        kubectl wait --for=condition=ready pod --all -n ${NAMESPACE} --timeout=300s || true
-
-                        # Get pod status
-                        kubectl get pods -n ${NAMESPACE}
-                        kubectl get services -n ${NAMESPACE}
-                        kubectl get ingress -n ${NAMESPACE}
-
-                        # Check deployment status
-                    """
+                    sh 'aws eks update-kubeconfig --name ${CLUSTER_NAME} --region ${AWS_REGION}'
+                    sh 'kubectl wait --for=condition=ready pod --all -n ${NAMESPACE} --timeout=300s || true'
+                    sh 'kubectl get pods -n ${NAMESPACE}'
+                    sh 'kubectl get services -n ${NAMESPACE}'
+                    sh 'kubectl get ingress -n ${NAMESPACE}'
                 }
             }
         }
@@ -195,15 +182,12 @@ pipeline {
             steps {
                 script {
                     try {
+                        sh 'LB_URL=$(kubectl get ingress -n ${NAMESPACE} -o jsonpath=\'{.items[0].status.loadBalancer.ingress[0].hostname}\' 2>/dev/null || echo "")'
+                        sh 'echo "Load Balancer URL: $LB_URL"'
                         sh """
-                            # Get Load Balancer URL
-                            LB_URL=\$(kubectl get ingress -n ${NAMESPACE} -o jsonpath='{.items[0].status.loadBalancer.ingress[0].hostname}' 2>/dev/null || echo "")
-                            echo "Load Balancer URL: \$LB_URL"
-
-                            # Basic connectivity test
-                            if [ -n "\$LB_URL" ]; then
-                                curl -f http://\$LB_URL/ || echo "Frontend test failed"
-                                curl -f http://\$LB_URL/api/master/actuator/health || echo "Master service health check failed"
+                            if [ -n "$LB_URL" ]; then
+                                curl -f http://$LB_URL/ || echo "Frontend test failed"
+                                curl -f http://$LB_URL/api/master/actuator/health || echo "Master service health check failed"
                             else
                                 echo "No Load Balancer URL found, skipping integration tests"
                             fi
