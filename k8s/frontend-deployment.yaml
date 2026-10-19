@@ -21,8 +21,6 @@ spec:
         app.kubernetes.io/component: frontend
         app.kubernetes.io/part-of: bbhealthapp
     spec:
-      imagePullSecrets:
-        - name: bbhealthapp-ecr-secret
       containers:
         - name: frontend
           image: 591950085623.dkr.ecr.ap-south-1.amazonaws.com/bbhealthapp-dev-frontend:latest

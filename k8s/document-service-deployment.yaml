@@ -21,8 +21,6 @@ spec:
         app.kubernetes.io/component: backend
         app.kubernetes.io/part-of: bbhealthapp
     spec:
-      imagePullSecrets:
-        - name: bbhealthapp-ecr-secret
       containers:
         - name: document-service
           image: 591950085623.dkr.ecr.ap-south-1.amazonaws.com/bbhealthapp-dev-document-service:latest
