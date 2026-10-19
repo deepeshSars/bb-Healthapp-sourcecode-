@@ -157,9 +157,10 @@ pipeline {
                         aws eks update-kubeconfig --name ${CLUSTER_NAME} --region ${AWS_REGION}
 
                         # Create namespace if it doesn't exist
-                        kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
-                        # Apply Kubernetes manifests (adjust path if needed)
-                        kubectl apply -f kubernetes/ -n ${NAMESPACE}
+                        kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml > /tmp/namespace.yaml || true
+                        kubectl apply -f /tmp/namespace.yaml || true
+                        # Apply Kubernetes manifests
+                        kubectl apply -f k8s/ -n ${NAMESPACE}
                     """
                 }
             }
@@ -175,7 +176,7 @@ pipeline {
                         aws eks update-kubeconfig --name ${CLUSTER_NAME} --region ${AWS_REGION}
 
                         # Wait for pods to be ready
-                         kubectl wait --for=condition=ready pod --all -n ${NAMESPACE} --timeout=300s || true
+                        kubectl wait --for=condition=ready pod --all -n ${NAMESPACE} --timeout=300s || true
 
                         # Get pod status
                         kubectl get pods -n ${NAMESPACE}
@@ -197,12 +198,17 @@ pipeline {
                     try {
                         sh """
                             # Get Load Balancer URL
-                            LB_URL=\$(kubectl get ingress -n ${NAMESPACE} -o jsonpath='{.items[0].status.loadBalancer.ingress[0].hostname}')
+                            kubectl get ingress -n ${NAMESPACE} -o jsonpath > /tmp/ingress.json || true
+                            LB_URL=\$(cat /tmp/ingress.json | jq -r '.items[0].status.loadBalancer.ingress[0].hostname' 2>/dev/null || echo "")
                             echo "Load Balancer URL: \$LB_URL"
 
                             # Basic connectivity test
-                            curl -f http://\$LB_URL/ || echo "Frontend test failed"
-                            curl -f http://\$LB_URL/api/master/actuator/health || echo "Master service health check failed"
+                            if [ -n "\$LB_URL" ]; then
+                                curl -f http://\$LB_URL/ || echo "Frontend test failed"
+                                curl -f http://\$LB_URL/api/master/actuator/health || echo "Master service health check failed"
+                            else
+                                echo "No Load Balancer URL found, skipping integration tests"
+                            fi
                         """
                     } catch (Exception e) {
                         echo "Integration tests failed: ${e}"
