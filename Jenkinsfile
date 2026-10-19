@@ -38,10 +38,13 @@ pipeline {
 
         stage('Configure AWS') {
             steps {
-                sh """
-                    aws configure set region ${AWS_REGION}
-                    aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ECR_REGISTRY}
-                """
+                withCredentials([usernamePassword(credentialsId: 'aws-credentials', usernameVariable: 'AWS_ACCESS_KEY_ID', passwordVariable: 'AWS_SECRET_ACCESS_KEY')]) {
+                    withEnv(["AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}", "AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}", "AWS_DEFAULT_REGION=${AWS_REGION}"]) {
+                        sh """
+                            aws ecr get-login-password --region ${AWS_REGION} | docker login --username AWS --password-stdin ${ECR_REGISTRY}
+                        """
+                    }
+                }
             }
         }
 
@@ -50,12 +53,16 @@ pipeline {
                 expression { params.REBUILD_INFRA == true }
             }
             steps {
-                dir('terraform') {
-                    sh """
-                        terraform init -input=false
-                        terraform plan -out=tfplan
-                        terraform apply -auto-approve tfplan
-                    """
+                withCredentials([usernamePassword(credentialsId: 'aws-credentials', usernameVariable: 'AWS_ACCESS_KEY_ID', passwordVariable: 'AWS_SECRET_ACCESS_KEY')]) {
+                    withEnv(["AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}", "AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}", "AWS_DEFAULT_REGION=${AWS_REGION}"]) {
+                        dir('terraform') {
+                            sh """
+                                terraform init -input=false
+                                terraform plan -out=tfplan
+                                terraform apply -auto-approve tfplan
+                            """
+                        }
+                    }
                 }
             }
         }
@@ -143,14 +150,18 @@ pipeline {
                 expression { params.SKIP_DEPLOY == false }
             }
             steps {
-                sh """
-                    aws eks update-kubeconfig --name ${CLUSTER_NAME} --region ${AWS_REGION}
+                withCredentials([usernamePassword(credentialsId: 'aws-credentials', usernameVariable: 'AWS_ACCESS_KEY_ID', passwordVariable: 'AWS_SECRET_ACCESS_KEY')]) {
+                    withEnv(["AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}", "AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}", "AWS_DEFAULT_REGION=${AWS_REGION}"]) {
+                        sh """
+                            aws eks update-kubeconfig --name ${CLUSTER_NAME} --region ${AWS_REGION}
 
-                    # Create namespace if it doesn't exist
-                    kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
-                    # Apply Kubernetes manifests (adjust path if needed)
-                    kubectl apply -f kubernetes/ -n ${NAMESPACE}
-                """
+                            # Create namespace if it doesn't exist
+                            kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
+                            # Apply Kubernetes manifests (adjust path if needed)
+                            kubectl apply -f kubernetes/ -n ${NAMESPACE}
+                        """
+                    }
+                }
             }
         }
 
@@ -159,19 +170,23 @@ pipeline {
                 expression { params.SKIP_DEPLOY == false }
             }
             steps {
-                sh """
-                    aws eks update-kubeconfig --name ${CLUSTER_NAME} --region ${AWS_REGION}
+                withCredentials([usernamePassword(credentialsId: 'aws-credentials', usernameVariable: 'AWS_ACCESS_KEY_ID', passwordVariable: 'AWS_SECRET_ACCESS_KEY')]) {
+                    withEnv(["AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}", "AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}", "AWS_DEFAULT_REGION=${AWS_REGION}"]) {
+                        sh """
+                            aws eks update-kubeconfig --name ${CLUSTER_NAME} --region ${AWS_REGION}
 
-                    # Wait for pods to be ready
-                     kubectl wait --for=condition=ready pod --all -n ${NAMESPACE} --timeout=300s || true
+                            # Wait for pods to be ready
+                             kubectl wait --for=condition=ready pod --all -n ${NAMESPACE} --timeout=300s || true
 
-                    # Get pod status
-                    kubectl get pods -n ${NAMESPACE}
-                    kubectl get services -n ${NAMESPACE}
-                    kubectl get ingress -n ${NAMESPACE}
+                            # Get pod status
+                            kubectl get pods -n ${NAMESPACE}
+                            kubectl get services -n ${NAMESPACE}
+                            kubectl get ingress -n ${NAMESPACE}
 
-                    # Check deployment status
-                """
+                            # Check deployment status
+                        """
+                    }
+                }
             }
         }
 
@@ -222,9 +237,13 @@ pipeline {
             script {
                 echo "❌ Deployment failed!"
                 echo "Attempting rollback..."
-                sh """
-                    aws eks update-kubeconfig --name ${CLUSTER_NAME} --region ${AWS_REGION}
-                """
+                withCredentials([usernamePassword(credentialsId: 'aws-credentials', usernameVariable: 'AWS_ACCESS_KEY_ID', passwordVariable: 'AWS_SECRET_ACCESS_KEY')]) {
+                    withEnv(["AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}", "AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}", "AWS_DEFAULT_REGION=${AWS_REGION}"]) {
+                        sh """
+                            aws eks update-kubeconfig --name ${CLUSTER_NAME} --region ${AWS_REGION}
+                        """
+                    }
+                }
             }
         }
         unstable {
