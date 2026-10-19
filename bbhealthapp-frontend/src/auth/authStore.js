@@ -11,16 +11,18 @@ const getDefaultRoles =()=>{
     return getApplicableRoles({role:"ANONYMOUS"})
 }
 export const getApplicableRoles =(user)=>{
+    const isApproved = (user.status === "APPROVED");
 
-
-    const isApproved = (user.status === "APPROVED")
-
+    // Backend returns roles as an array: [{name: "GOVERNMENT_AUTHORITY"}], or role string
     let role = user.role;
-    const isUser = (role === "USER")
-    const isDoctor = (role === "DOCTOR")
-    const isAuthority = (role === "GOVERNMENT_AUTHORITY")
-    const isTester = (role === "TESTER")
+    if (!role && Array.isArray(user.roles) && user.roles.length > 0) {
+        role = user.roles[0].name || user.roles[0];
+    }
 
+    const isUser = (role === "USER" || role === "ROLE_USER");
+    const isDoctor = (role === "DOCTOR" || role === "ROLE_DOCTOR");
+    const isAuthority = (role === "GOVERNMENT_AUTHORITY" || role === "ROLE_GOVERNMENT_AUTHORITY");
+    const isTester = (role === "TESTER" || role === "ROLE_TESTER");
 
     return {isUser,isDoctor,isAuthority,isTester,isApproved}
 }

@@ -14,8 +14,8 @@ export function getAsUser(userObject) {
         pinCode: userObject.pinCode,
         created: new Date(userObject.created),
         updated: new Date(userObject.updated),
-        role: userObject.roles[0].name,
-
-
+        status: userObject.status,
+        role: (userObject.roles && userObject.roles.length > 0) ? (userObject.roles[0].name || userObject.roles[0]) : (userObject.role || ""),
+        roles: userObject.roles || []
     };
 }

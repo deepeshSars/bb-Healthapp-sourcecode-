@@ -2,6 +2,7 @@ import { environment } from "../environment";
 import http from "../shared/services/http-service";
 import { map, concatMap } from "rxjs/operators";
 import { LOGOUT } from "./authStore";
+import { getAsUser } from "./user";
 
 // ===============================
 // LOGIN
@@ -33,7 +34,7 @@ const getMyDetailsWithToken = (token) => {
   return http.get(url).pipe(
     map((userObject) => ({
       token,
-      user: userObject,
+      user: getAsUser(userObject),
     }))
   );
 };
