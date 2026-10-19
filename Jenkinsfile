@@ -31,12 +31,8 @@ pipeline {
 
         stage('Checkout') {
             steps {
-                sh '''
-                    git clone https://github.com/deepeshSars/bb-Healthapp-sourcecode.git
-                    cd bb-Healthapp-sourcecode
-                    git checkout main
-                    git log -1
-                '''
+                checkout scm
+                sh 'git log -1'
             }
         }
 
@@ -54,7 +50,7 @@ pipeline {
                 expression { params.REBUILD_INFRA == true }
             }
             steps {
-                dir('bb-Healthapp-sourcecode/terraform') {
+                dir('terraform') {
                     sh """
                         terraform init -input=false
                         terraform plan -out=tfplan
@@ -68,7 +64,7 @@ pipeline {
             parallel {
                 stage('Build Frontend') {
                     steps {
-                        dir('bb-Healthapp-sourcecode/bbhealthapp-frontend') {
+                        dir('bbhealthapp-frontend') {
                             sh """
                                 docker build -t ${ECR_REGISTRY}/${FRONTEND_IMAGE}:${BUILD_NUMBER} .
                                 docker tag ${ECR_REGISTRY}/${FRONTEND_IMAGE}:${BUILD_NUMBER} ${ECR_REGISTRY}/${FRONTEND_IMAGE}:latest
@@ -78,7 +74,7 @@ pipeline {
                 }
                 stage('Build Master Service') {
                     steps {
-                        dir('bb-Healthapp-sourcecode/bbhealthapp-backend/bbhealthapp-api-master') {
+                        dir('bbhealthapp-backend/bbhealthapp-api-master') {
                             sh """
                                 docker build -t ${ECR_REGISTRY}/${MASTER_IMAGE}:${BUILD_NUMBER} .
                                 docker tag ${ECR_REGISTRY}/${MASTER_IMAGE}:${BUILD_NUMBER} ${ECR_REGISTRY}/${MASTER_IMAGE}:latest
@@ -88,7 +84,7 @@ pipeline {
                 }
                 stage('Build Register Service') {
                     steps {
-                        dir('bb-Healthapp-sourcecode/bbhealthapp-backend/bbhealthapp-api-register') {
+                        dir('bbhealthapp-backend/bbhealthapp-api-register') {
                             sh """
                                 docker build -t ${ECR_REGISTRY}/${REGISTER_IMAGE}:${BUILD_NUMBER} .
                                 docker tag ${ECR_REGISTRY}/${REGISTER_IMAGE}:${BUILD_NUMBER} ${ECR_REGISTRY}/${REGISTER_IMAGE}:latest
@@ -98,7 +94,7 @@ pipeline {
                 }
                 stage('Build Document Service') {
                     steps {
-                        dir('bb-Healthapp-sourcecode/bbhealthapp-backend/bbhealthapp-api-document') {
+                        dir('bbhealthapp-backend/bbhealthapp-api-document') {
                             sh """
                                 docker build -t ${ECR_REGISTRY}/${DOCUMENT_IMAGE}:${BUILD_NUMBER} .
                                 docker tag ${ECR_REGISTRY}/${DOCUMENT_IMAGE}:${BUILD_NUMBER} ${ECR_REGISTRY}/${DOCUMENT_IMAGE}:latest
@@ -114,18 +110,16 @@ pipeline {
                 expression { params.RUN_TESTS == true }
             }
             steps {
-                dir('bb-Healthapp-sourcecode') {
-                    sh """
-                        # Run basic Docker image validation
-                        docker images | grep bbhealthapp
+                sh """
+                    # Run basic Docker image validation
+                    docker images | grep bbhealthapp
 
-                        # Test frontend build
-                        docker run ${ECR_REGISTRY}/${FRONTEND_IMAGE}:${BUILD_NUMBER} ls -la /usr/local/apache2/htdocs/ || true
+                    # Test frontend build
+                    docker run ${ECR_REGISTRY}/${FRONTEND_IMAGE}:${BUILD_NUMBER} ls -la /usr/local/apache2/htdocs/ || true
 
-                        # Test backend services health check (if health endpoints exist)
-                        # docker run ${ECR_REGISTRY}/${MASTER_IMAGE}:${BUILD_NUMBER} curl -f http://localhost:8080/actuator/health || true
-                    """
-                }
+                    # Test backend services health check (if health endpoints exist)
+                    # docker run ${ECR_REGISTRY}/${MASTER_IMAGE}:${BUILD_NUMBER} curl -f http://localhost:8080/actuator/health || true
+                """
             }
         }
 
@@ -149,16 +143,14 @@ pipeline {
                 expression { params.SKIP_DEPLOY == false }
             }
             steps {
-                dir('bb-Healthapp-sourcecode') {
-                    sh """
-                        aws eks update-kubeconfig --name ${CLUSTER_NAME} --region ${AWS_REGION}
+                sh """
+                    aws eks update-kubeconfig --name ${CLUSTER_NAME} --region ${AWS_REGION}
 
-                        # Create namespace if it doesn't exist
-                        kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
-                        # Apply Kubernetes manifests (adjust path if needed)
-                        kubectl apply -f kubernetes/ -n ${NAMESPACE}
-                    """
-                }
+                    # Create namespace if it doesn't exist
+                    kubectl create namespace ${NAMESPACE} --dry-run=client -o yaml | kubectl apply -f -
+                    # Apply Kubernetes manifests (adjust path if needed)
+                    kubectl apply -f kubernetes/ -n ${NAMESPACE}
+                """
             }
         }
 
