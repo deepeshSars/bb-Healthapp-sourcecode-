@@ -75,8 +75,7 @@ spec:
             failureThreshold: 3
       volumes:
         - name: master-uploads
-          persistentVolumeClaim:
-            claimName: master-uploads-pvc
+          emptyDir: {}
 ---
 apiVersion: v1
 kind: Service
