@@ -3,9 +3,9 @@
 // ===============================
 
 // MUST start with REACT_APP_ in .env or default to the provisioned AWS ELBs
-const docSvc = process.env.REACT_APP_DOCSVC_HOST || "a951a9c4a4d784f3dbf4382929882f8d-744204313.ap-south-1.elb.amazonaws.com:8083";
-const regSvc = process.env.REACT_APP_REGSVC_HOST || "af1659a970b7f450bb4256683b7bbc51-1930909170.ap-south-1.elb.amazonaws.com:8082";
-const masterSvc = process.env.REACT_APP_MASTERSVC_HOST || "ad2a6fd6a8ed94d2eb29dab1e12867c2-518173443.ap-south-1.elb.amazonaws.com:8081";
+const docSvc = process.env.REACT_APP_DOCSVC_HOST || "aef42fd2a78724cb88a8e31f66e61a99-1787005417.ap-south-1.elb.amazonaws.com:8083";
+const regSvc = process.env.REACT_APP_REGSVC_HOST || "a6a9b5014957247d28c0969042a9841b-918609063.ap-south-1.elb.amazonaws.com:8082";
+const masterSvc = process.env.REACT_APP_MASTERSVC_HOST || "a445649e7fa784acb87d5a69be9f066c-541123145.ap-south-1.elb.amazonaws.com:8081";
 
 const formatUrl = (host) => (host.startsWith("http://") || host.startsWith("https://")) ? host : `http://${host}`;
 
