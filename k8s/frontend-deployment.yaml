@@ -25,6 +25,13 @@ spec:
         - name: frontend
           image: 591950085623.dkr.ecr.ap-south-1.amazonaws.com/bbhealthapp-dev-frontend:latest
           imagePullPolicy: Always
+          env:
+            - name: REACT_APP_MASTERSVC_HOST
+              value: "a445649e7fa784acb87d5a69be9f066c-541123145.ap-south-1.elb.amazonaws.com:8081"
+            - name: REACT_APP_REGSVC_HOST
+              value: "a6a9b5014957247d28c0969042a9841b-918609063.ap-south-1.elb.amazonaws.com:8082"
+            - name: REACT_APP_DOCSVC_HOST
+              value: "aef42fd2a78724cb88a8e31f66e61a99-1787005417.ap-south-1.elb.amazonaws.com:8083"
           ports:
             - containerPort: 80
               name: http
